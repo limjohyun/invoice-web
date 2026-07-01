@@ -1,0 +1,14 @@
+# 운영체제와 무관하게 저장소 내 텍스트 파일의 줄바꿈을 LF로 통일합니다.
+# .prettierrc의 endOfLine: "lf" 설정과 반드시 일치해야 합니다.
+# (Windows의 core.autocrlf=true 설정으로 인한 CRLF 변환을 방지하여
+#  `npm run check-all`의 format:check 단계가 항상 통과하도록 보장합니다.)
+* text=auto eol=lf
+
+# 바이너리 파일은 줄바꿈 변환에서 제외합니다.
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.woff binary
+*.woff2 binary
