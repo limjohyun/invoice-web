@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import { signupSchema, type SignupFormData } from '@/lib/schemas/auth'
+import { signUp } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -27,6 +30,10 @@ import {
 } from '@/components/ui/form'
 
 export function SignupForm() {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
   const form = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
@@ -39,9 +46,25 @@ export function SignupForm() {
     mode: 'onChange',
   })
 
-  // TODO: 실제 인증 백엔드 연동 시 이 함수에서 회원가입 API를 호출합니다.
-  function onSubmit() {
-    // 인증 로직 연동 전까지는 별도 처리가 없습니다.
+  async function onSubmit(data: SignupFormData) {
+    setIsLoading(true)
+    setSubmitError(null)
+
+    try {
+      const result = await signUp(data)
+
+      if (!result.success) {
+        setSubmitError(result.error?.message || '회원가입에 실패했습니다.')
+        return
+      }
+
+      router.push('/settings')
+    } catch (error) {
+      console.error('회원가입 에러:', error)
+      setSubmitError('예상치 못한 오류가 발생했습니다. 다시 시도해주세요.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -55,6 +78,11 @@ export function SignupForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {submitError && (
+          <div className="bg-destructive/10 text-destructive mb-4 rounded-md p-3 text-sm">
+            {submitError}
+          </div>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -149,8 +177,8 @@ export function SignupForm() {
               )}
             />
 
-            <Button type="submit" className="w-full">
-              회원가입
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? '가입 중...' : '회원가입'}
             </Button>
           </form>
         </Form>

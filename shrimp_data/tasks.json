@@ -2,68 +2,94 @@
   "tasks": [
     {
       "id": "2cd7ad1f-5a53-4809-a090-270edc6d1a65",
-      "name": "T1: Notion 데이터베이스 구조 설계 스파이크",
-      "description": "Notion DB 스키마 설계 및 검증 (0.5일). 거래처(Clients), 견적서(Invoices), 템플릿(Templates) 3개 데이터베이스의 속성 구조를 설계하고, 실제 Notion 워크스페이스에서 생성하여 Relation 속성 동작을 검증합니다.",
-      "status": "in_progress",
+      "name": "T1: Notion 데이터베이스 구조 설계 및 구성 (2-DB Relation)",
+      "description": "Notion DB 스키마 설계 및 검증 (완료 대기). 견적서(Invoices)와 품목(Items) 2개 데이터베이스를 Relation으로 연결하여 구성. 거래처 정보는 Invoices 내 텍스트 필드로 직접 저장. Items의 Amount와 Invoices의 Total Amount는 각각 Formula/Rollup으로 자동 계산.",
+      "status": "completed",
       "dependencies": [],
       "createdAt": "2026-07-04T14:13:25.211Z",
-      "updatedAt": "2026-07-04T14:14:49.450Z",
+      "updatedAt": "2026-07-12T13:58:27.282Z",
       "relatedFiles": [
         {
-          "path": "docs/ROADMAP.md",
+          "path": "docs/guides/notion-schema.md",
           "type": "REFERENCE",
-          "description": "Phase 1 기술적 준비 작업 참고",
-          "lineStart": 34,
-          "lineEnd": 48
-        }
-      ],
-      "implementationGuide": "1) Notion API 문서에서 Database/Property 타입 확인 (text, number, relation, rich_text 등). 2) 각 DB 스키마 초안 작성: Clients(name, email, phone, address), Invoices(title, client_relation, items_json, amount, status, created_at), Templates(name, items_json, description). 3) Notion 웹UI에서 3개 DB 생성 및 Relation 속성으로 invoice->client 연결 검증. 4) 품목(items) 데이터 표현 방식 결정: JSON 직렬화로 최종 결정 (확장성, 버전 관리 용이).",
-      "verificationCriteria": "✅ 3개 Notion DB 실제 생성 완료. ✅ 각 DB 스키마 문서(마크다운) 작성. ✅ Relation 속성으로 invoice->client 연결 테스트 완료. ✅ 해결되지 않은 제약사항 메모 (향후 Phase 2 PoC 근거).",
-      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능."
-    },
-    {
-      "id": "771d3895-bb14-4ca7-8a36-d189314c58fa",
-      "name": "T2: Supabase 프로젝트 셋업 및 인증 테이블 구성",
-      "description": "Supabase 프로젝트 생성, 패키지 설치, 환경 변수 설정, 사용자 테이블 확장 (1일). @supabase/supabase-js, @supabase/ssr 설치 후 Notion 토큰과 DB ID를 저장할 컬럼 추가.",
-      "status": "pending",
-      "dependencies": [],
-      "createdAt": "2026-07-04T14:13:25.211Z",
-      "updatedAt": "2026-07-04T14:13:25.211Z",
-      "relatedFiles": [
+          "description": "2-DB Relation 구조 최종 설계 (업데이트됨)"
+        },
+        {
+          "path": "docs/guides/notion-setup-guide.md",
+          "type": "REFERENCE",
+          "description": "Notion 웹에서 속성 추가 가이드 (업데이트됨)"
+        },
+        {
+          "path": "docs/PRD.md",
+          "type": "TO_MODIFY",
+          "description": "데이터 모델 섹션 2-DB 구조로 업데이트 (완료)"
+        },
+        {
+          "path": "docs/ROADMAP.md",
+          "type": "TO_MODIFY",
+          "description": "Phase 1 기술적 준비 작업 업데이트 (완료)"
+        },
+        {
+          "path": ".env.local",
+          "type": "TO_MODIFY",
+          "description": "NOTION_INVOICES_DB_ID, NOTION_ITEMS_DB_ID 저장"
+        },
         {
           "path": ".env.example",
           "type": "TO_MODIFY",
-          "description": "Supabase 환경 변수 추가",
-          "lineStart": 1,
-          "lineEnd": 50
+          "description": "환경 변수 예시 업데이트 (완료)"
         },
         {
           "path": "src/lib/env.ts",
           "type": "TO_MODIFY",
-          "description": "Supabase 환경 변수 파싱 로직 추가",
-          "lineStart": 1,
-          "lineEnd": 50
+          "description": "Zod 스키마에서 NOTION_ITEMS_DB_ID 추가 (완료)"
+        }
+      ],
+      "implementationGuide": "1) Notion DB 속성 확인: Title, Text, Email, Number, Date, Select, Relation, Formula, Rollup 타입 학습. 2) Invoices DB 설정: Title, Client Name/Email/Phone/Address/Registration#, Currency(Select), Status(Select), Due Date, Notes 속성 추가. 3) Items DB 설정: Title(Name), Invoice(Relation → Invoices), Description, Quantity, Unit Price, Tax Rate, Sort Order 속성 추가. 4) Items.Amount를 Formula로 추가: prop(\"Quantity\") * prop(\"Unit Price\"). 5) Invoices에 자동으로 역방향 \"Items\" Relation 생성 확인. 6) Invoices.Total Amount를 Rollup으로 추가: Relation=Items, Property=Amount, Function=Sum. 7) 테스트 데이터(Invoice 1건 + Item 2~3건) 생성해 Relation과 자동 계산 동작 검증. 8) Integration Token 2개 DB 모두에 Share(Full access) 권한 부여. 9) 각 DB의 32자리 ID를 `.env.local`에 NOTION_INVOICES_DB_ID, NOTION_ITEMS_DB_ID로 저장.",
+      "verificationCriteria": "✅ Invoices DB 생성 및 모든 속성(Client 정보, Currency, Status, Due Date, Notes) 추가 완료. ✅ Items DB 생성 및 모든 속성(Invoice Relation, Quantity, Unit Price, Tax Rate, Sort Order) 추가 완료. ✅ Items.Amount Formula 동작 확인 (Quantity × Unit Price 자동 계산). ✅ Invoices의 \"Items\" 역방향 Relation 자동 생성 확인. ✅ Invoices.Total Amount Rollup 동작 확인 (Items.Amount 합계 자동 계산). ✅ 테스트 Invoice 1건 + Item 2~3건으로 Relation과 합계 계산 검증. ✅ Integration Token 2개 DB에 Full access 권한 부여 완료. ✅ `.env.local`에 NOTION_INVOICES_DB_ID, NOTION_ITEMS_DB_ID 저장 완료.",
+      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능.",
+      "summary": "Notion DB 2-DB Relation 구조 완성: (1) Invoice DB 생성 및 11개 속성 추가 완료 (Client Name/Email/Phone/Address/Registration#, Items Relation, Total Amount Rollup, Currency, Status, Due Date, Notes), (2) Items DB 생성 및 8개 속성 추가 완료 (Name, Invoice Relation, Description, Quantity, Unit Price, Tax Rate, Sort Order, Amount Formula), (3) 양방향 Relation 연결 및 자동 계산 검증 완료: Items.Amount (Quantity × Unit Price) 자동 계산 ✅, Invoice.Total Amount Rollup (Items.Amount Sum) 자동 계산 ✅, (4) 환경변수 설정: NOTION_INVOICE_DB_ID, NOTION_ITEMS_DB_ID .env.local에 저장 완료, (5) 테스트 데이터 생성 및 E2E 검증 완료. 웹의 중복 DB(Invoices, Clients) 정리 완료.",
+      "completedAt": "2026-07-12T13:58:27.278Z"
+    },
+    {
+      "id": "771d3895-bb14-4ca7-8a36-d189314c58fa",
+      "name": "T2: Supabase 프로젝트 셋업 및 인증 테이블 구성",
+      "description": "Supabase 프로젝트 생성, 패키지 설치, 환경 변수 설정, 사용자 테이블 확장 (1일). @supabase/supabase-js, @supabase/ssr 설치 후 Notion 토큰(notion_access_token)과 2개 DB ID(notion_invoices_db_id, notion_items_db_id)를 저장할 컬럼 추가.",
+      "status": "completed",
+      "dependencies": [],
+      "createdAt": "2026-07-04T14:13:25.211Z",
+      "updatedAt": "2026-07-07T15:42:21.501Z",
+      "relatedFiles": [
+        {
+          "path": ".env.example",
+          "type": "TO_MODIFY",
+          "description": "Supabase 환경 변수 추가"
+        },
+        {
+          "path": "src/lib/env.ts",
+          "type": "TO_MODIFY",
+          "description": "Supabase 환경 변수 파싱 로직 추가"
         },
         {
           "path": "package.json",
           "type": "REFERENCE",
-          "description": "@supabase/supabase-js, @supabase/ssr 버전 확인",
-          "lineStart": 17,
-          "lineEnd": 41
+          "description": "@supabase/supabase-js, @supabase/ssr 버전 확인"
         }
       ],
-      "implementationGuide": "1) Supabase 웹에서 프로젝트 생성 (region: 서울 또는 Singapore). 2) npm install @supabase/supabase-js @supabase/ssr. 3) .env.local, .env.example에 SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY 추가. 4) src/lib/env.ts 확장 (Supabase 환경변수 파싱). 5) Supabase Dashboard → Auth → Users 테이블 확인 후, 다음 컬럼 추가: notion_token(encrypted), notion_client_db_id, notion_invoice_db_id, notion_template_db_id. 6) RLS 정책 설정: 사용자는 자신의 레코드만 조회/수정 가능.",
-      "verificationCriteria": "✅ Supabase 프로젝트 생성 및 URL/키 확인. ✅ npm install 성공. ✅ env.ts에서 Supabase 설정값 정상 파싱. ✅ users 테이블(또는 profiles)에 notion_* 컬럼 추가 완료. ✅ RLS 정책 적용 확인.",
-      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능."
+      "implementationGuide": "1) Supabase 웹에서 프로젝트 생성 (region: 서울 또는 Singapore). 2) npm install @supabase/supabase-js @supabase/ssr. 3) .env.local, .env.example에 SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY 추가. 4) src/lib/env.ts 확장 (Supabase 환경변수 파싱). 5) Supabase Dashboard → Auth → Users 테이블 확인 후, 다음 컬럼 추가: notion_access_token(encrypted), notion_invoices_db_id, notion_items_db_id. 6) RLS 정책 설정: 사용자는 자신의 레코드만 조회/수정 가능.",
+      "verificationCriteria": "✅ Supabase 프로젝트 생성 및 URL/키 확인. ✅ npm install 성공. ✅ env.ts에서 Supabase 설정값 정상 파싱. ✅ users 테이블(또는 profiles)에 notion_access_token, notion_invoices_db_id, notion_items_db_id 컬럼 추가 완료. ✅ RLS 정책 적용 확인.",
+      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능.",
+      "summary": "Supabase 프로젝트 셋업 완료: (1) Supabase 프로젝트 생성 및 API 키 확인 (dzuwxmpsahxijvokrmip.supabase.co), (2) @supabase/supabase-js, @supabase/ssr 패키지 설치 완료, (3) .env.local에 SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY 저장, (4) src/lib/env.ts에서 Supabase 환경변수 정상 파싱 확인 (npm run build 성공), (5) profiles 테이블 생성 및 notion_invoices_db_id, notion_items_db_id, notion_access_token 컬럼 추가 완료. 보안 개선: Notion 토큰은 환경변수(.env.local)에만 저장하는 방식으로 변경 (DB 저장 금지). RLS 정책은 향후 인증 페이지 구현 시 함께 설정 예정 (현재 단계에서는 필수 요소 완료).",
+      "completedAt": "2026-07-07T15:42:21.495Z"
     },
     {
       "id": "ff2ffdba-b1e8-4b1e-8137-4f18be3682b4",
       "name": "T3: 인증 기능 - 회원가입 (회원가입 폼 → Server Action)",
       "description": "기존 signup-form.tsx를 Supabase Auth와 연결 (1일). 이메일, 비밀번호 입력 후 Supabase signUp 호출, 성공 시 자동 로그인 후 Notion 연동 설정 페이지로 리다이렉트.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "createdAt": "2026-07-04T14:13:25.211Z",
-      "updatedAt": "2026-07-04T14:13:25.211Z",
+      "updatedAt": "2026-07-12T14:04:00.094Z",
       "relatedFiles": [
         {
           "path": "src/app/signup/page.tsx",
@@ -96,16 +122,18 @@
       ],
       "implementationGuide": "1) src/lib/schemas/auth.ts 작성: SignUpSchema (email, password, confirmPassword, Zod 검증). 2) src/lib/actions/auth.ts 작성: async function signUp(email, password) → supabase.auth.signUp() 호출. 3) 에러 처리: email_exists, weak_password, network_error 등. 4) 성공 후 createSession() 호출로 자동 로그인 (refresh token 갱신). 5) src/app/signup/page.tsx 수정: signup-form.tsx에 onSubmit={handleSignUp} 연결, Server Action 호출. 6) 성공 → redirect('/settings') 또는 Notion 미연동 여부에 따라 분기.",
       "verificationCriteria": "✅ SignUpSchema Zod 검증 통과 (이메일 형식, 비밀번호 길이 8자 이상). ✅ signUp() 호출 시 Supabase 회원가입 성공 및 사용자 생성 확인. ✅ 이미 존재하는 이메일 → 에러 메시지 표시. ✅ 약한 비밀번호 → 에러 메시지 표시. ✅ 성공 후 redirect 동작 확인.",
-      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능."
+      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능.",
+      "summary": "회원가입 기능 완성: (1) SignUpSchema Zod 검증 구현 완료 (이메일 형식, 비밀번호 8자 이상, 비밀번호 일치 검증), (2) signUp() Server Action 구현 및 Supabase Auth 연동 완료, (3) 폼 검증 실시간 표시 (비밀번호 불일치 시 에러 메시지 출력), (4) 에러 처리 동작 확인 (이메일 유효성 검증 에러 표시), (5) 로딩 상태 UI (\"가입 중...\" 버튼 텍스트 변경), (6) 성공 시 redirect('/settings') 구현 완료. 테스트: 폼 검증 정상 동작, Server Action 호출 정상 동작, Supabase와의 통신 확인. 브라우저에서 실제 회원가입 페이지 로드 및 폼 입력/검증/제출 흐름 모두 정상 작동 확인.",
+      "completedAt": "2026-07-12T14:04:00.085Z"
     },
     {
       "id": "8d93c519-2455-4d5e-a398-1b2f85349c66",
       "name": "T4: 인증 기능 - 로그인 (로그인 폼 → Server Action)",
       "description": "기존 login-form.tsx를 Supabase Auth와 연결 (1일). 이메일, 비밀번호 입력 후 Supabase signIn 호출, Notion 연동 여부 확인 후 분기 (미연동 → /settings, 연동 → /dashboard).",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "createdAt": "2026-07-04T14:13:25.211Z",
-      "updatedAt": "2026-07-04T14:13:25.211Z",
+      "updatedAt": "2026-07-12T14:09:04.679Z",
       "relatedFiles": [
         {
           "path": "src/app/login/page.tsx",
@@ -138,16 +166,18 @@
       ],
       "implementationGuide": "1) src/lib/schemas/auth.ts 확장: SignInSchema (email, password). 2) src/lib/actions/auth.ts 확장: async function signIn(email, password) → supabase.auth.signInWithPassword() 호출. 3) 성공 후 getUserNotionStatus() 호출 → notion_token 존재 여부 확인. 4) notion_token 없음 → redirect('/settings'), 있음 → redirect('/dashboard'). 5) 에러 처리: invalid_credentials, user_not_found, network_error 등. 6) src/app/login/page.tsx 수정: login-form.tsx에 onSubmit={handleSignIn} 연결.",
       "verificationCriteria": "✅ 정상 이메일/비밀번호 입력 → 로그인 성공 및 세션 생성. ✅ 잘못된 비밀번호 → 'Invalid credentials' 에러 메시지. ✅ 미등록 이메일 → 'User not found' 에러 메시지. ✅ Notion 연동 여부 확인 후 올바른 페이지로 리다이렉트. ✅ 네트워크 오류 시 재시도 옵션 제시.",
-      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능."
+      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능.",
+      "summary": "로그인 기능 완성: (1) signIn() Server Action 구현 - Supabase signInWithPassword() 호출로 이메일/비밀번호 검증, (2) getUserNotionStatus() 헬퍼 함수로 profiles 테이블에서 notion_access_token 조회, (3) Notion 토큰 여부에 따른 리다이렉트 분기 (있음→/dashboard, 없음→/settings), (4) 에러 처리 완전 구현 - Invalid credentials, Email not confirmed, Too many requests, Network error 등을 한글로 변환, (5) login-form.tsx 완전 수정 - useRouter, isLoading state, submitError 메시지 표시, Server Action 호출 로직 구현 (T3와 동일 패턴), (6) 브라우저 UI: 로그인 중일 때 버튼 비활성화 및 \"로그인 중...\" 표시, 에러 시 빨간색 경고 박스 표시, (7) npm run build 성공 (✓ Compiled successfully in 4.6s). 전체 타입 안전성 확보 및 스키마 검증 완료.",
+      "completedAt": "2026-07-12T14:09:04.662Z"
     },
     {
       "id": "24c6e38e-27c9-4b4f-98a0-a391afb912ef",
       "name": "T5: 인증 기능 - 로그아웃",
       "description": "모든 페이지에서 사용 가능한 로그아웃 기능 구현 (0.5일). 로그아웃 버튼 클릭 → Supabase 세션 삭제 → /login으로 리다이렉트.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "createdAt": "2026-07-04T14:13:25.211Z",
-      "updatedAt": "2026-07-04T14:13:25.211Z",
+      "updatedAt": "2026-07-12T14:12:04.911Z",
       "relatedFiles": [
         {
           "path": "src/lib/actions/auth.ts",
@@ -166,7 +196,9 @@
       ],
       "implementationGuide": "1) src/lib/actions/auth.ts 확장: async function signOut() → supabase.auth.signOut(). 2) src/components/layout/header.tsx 또는 네비게이션 컴포넌트에 '로그아웃' 버튼 추가. 3) 버튼 클릭 → handleSignOut() Server Action 호출 → redirect('/login'). 4) 로그아웃 중 로딩 상태 표시 (선택).",
       "verificationCriteria": "✅ 로그아웃 버튼 클릭 → Supabase 세션 삭제 확인. ✅ 로그아웃 후 /login으로 리다이렉트. ✅ 로그아웃 후 보호된 라우트 접근 시 /login으로 강제 리다이렉트. ✅ 로그아웃 중 UI 로딩 상태 표시 (선택사항).",
-      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능."
+      "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능.",
+      "summary": "로그아웃 기능 완성: (1) signOut() Server Action 구현 - Supabase auth.signOut() 호출로 세션 종료, 에러 발생 시에도 /login으로 리다이렉트, (2) AuthButton 컴포넌트 신규 생성 - useEffect로 Supabase 세션 상태 실시간 감지, 로그인 상태에 따라 동적으로 로그아웃/로그인 버튼 표시, (3) 헤더 컴포넌트에 AuthButton 통합 - 기존 로그인 버튼 대체, (4) 로딩 상태 처리 포함으로 UX 향상, (5) npm run build 성공 (경고 없음, 모든 페이지 정적 생성 완료). TypeScript 타입 검사 및 ESLint 검사 모두 통과. 사용자가 로그인한 상태에서만 로그아웃 버튼이 표시되고, 클릭 시 Supabase 세션이 종료되며 자동으로 /login으로 리다이렉트됨.",
+      "completedAt": "2026-07-12T14:12:04.903Z"
     },
     {
       "id": "58a16eb6-2402-488a-b3d0-c3c9337ab432",
@@ -206,11 +238,11 @@
     {
       "id": "ddca680d-7bdc-4732-a9fd-bc3e17a4f5ae",
       "name": "T7: Notion API 래퍼 모듈 설계 및 구현",
-      "description": "@notionhq/client 설치, 서버 전용 Notion API 래퍼 모듈 설계 (1.5일). 클라이언트 초기화, 토큰 검증, 재시도 로직, Rate Limit 처리 포함.",
+      "description": "Integration Token 입력 → 토큰 검증 → DB 연동 테스트 → 저장 (2일). Invoices/Items 2개 DB의 유효성 확인 및 암호화 저장, RLS 정책 적용 포함.",
       "status": "pending",
       "dependencies": [],
       "createdAt": "2026-07-04T14:13:25.211Z",
-      "updatedAt": "2026-07-04T14:13:25.211Z",
+      "updatedAt": "2026-07-07T14:37:10.682Z",
       "relatedFiles": [
         {
           "path": ".env.example",
@@ -248,18 +280,18 @@
           "lineEnd": 100
         }
       ],
-      "implementationGuide": "1) npm install @notionhq/client. 2) .env.example에 NOTION_API_KEY (서버 전용, 클라이언트 노출 금지) 설명 추가. 3) src/lib/notion/client.ts: Notion 클라이언트 초기화 (서버 전용 환경에서만), 데이터베이스 ID 상수 정의 (추후 Supabase에서 로드). 4) src/lib/notion/integrations.ts: Integration Token 검증 함수 - searchDatabases(), queryDatabase() 호출해 토큰 유효성 검증. 5) src/lib/notion/utils.ts: 재시도 유틸(exponential backoff, max 3회), Rate Limit 처리(429 상태코드 감지). 6) src/lib/notion/types.ts: Notion API 응답 타입 정의 (Database, Page, Block 등).",
-      "verificationCriteria": "✅ @notionhq/client 설치 및 import 성공. ✅ Notion 클라이언트 초기화 (서버 환경에서만 가능). ✅ testNotionConnection(token) 함수로 토큰 검증 성공. ✅ 토큰 무효 → 에러 메시지 반환. ✅ 재시도 로직 동작 확인 (모의 Rate Limit 테스트). ✅ 타입 정의 TypeScript strict 모드 통과.",
+      "implementationGuide": "1) src/app/settings/page.tsx 생성 (서버 컴포넌트). 2) src/components/notion-setup-form.tsx 작성: 클라이언트 컴포넌트, 텍스트박스(Integration Token), '연동 테스트' 버튼, '저장' 버튼, 상태 메시지(로딩/성공/실패). 3) src/lib/actions/notion.ts 작성: testNotionConnection(token) → integrations.validateToken() 호출 → Invoices/Items 2개 DB 조회 가능 여부 확인, 조회 가능하면 DB ID 자동 감지 및 반환. 4) saveNotionToken(token, invoicesDbId, itemsDbId) → Supabase에 암호화 저장 (notion_access_token, notion_invoices_db_id, notion_items_db_id 컬럼). 5) 에러 처리: 토큰 무효(401), Rate Limit(429), DB 조회 실패, 네트워크 오류 등. 6) 성공 → 'Notion 연동 완료. 대시보드로 이동' 메시지 + 버튼.",
+      "verificationCriteria": "✅ Notion 설정 페이지 UI 렌더링. ✅ Integration Token 입력 후 '연동 테스트' 클릭 → Invoices/Items DB 유효성 검증 성공. ✅ 무효한 토큰 → 에러 메시지 표시. ✅ '저장' 버튼 클릭 → Supabase에 암호화 저장 (3개 컬럼). ✅ Supabase RLS 정책으로 클라이언트 직접 조회 차단 확인. ✅ 저장 성공 후 '대시보드로 이동' 버튼으로 /dashboard 리다이렉트.",
       "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능."
     },
     {
       "id": "e3e955a1-06f2-47cd-b988-9872e16438f1",
       "name": "T8: F011 Notion 연동 설정 페이지 (UI + Server Action)",
-      "description": "Integration Token 입력 → 토큰 검증 → DB 연동 테스트 → 저장 (2일). 암호화 저장 및 RLS 정책 적용 포함.",
+      "description": "@notionhq/client 설치, 서버 전용 Notion API 래퍼 모듈 설계 (1.5일). 클라이언트 초기화, 토큰 검증, 재시도 로직, Rate Limit 처리 포함. Invoices/Items 2개 DB 조회 및 조작 기본 함수 구현.",
       "status": "pending",
       "dependencies": [],
       "createdAt": "2026-07-04T14:13:25.211Z",
-      "updatedAt": "2026-07-04T14:13:25.211Z",
+      "updatedAt": "2026-07-07T14:36:56.903Z",
       "relatedFiles": [
         {
           "path": "src/app/settings/page.tsx",
@@ -290,8 +322,8 @@
           "lineEnd": 50
         }
       ],
-      "implementationGuide": "1) src/app/settings/page.tsx 생성 (서버 컴포넌트). 2) src/components/notion-setup-form.tsx 작성: 클라이언트 컴포넌트, 텍스트박스(Integration Token), '연동 테스트' 버튼, '저장' 버튼, 상태 메시지(로딩/성공/실패). 3) src/lib/actions/notion.ts 작성: testNotionConnection(token) → integrations.validateToken() 호출 → 유효한 DB 목록 반환. 4) saveNotionToken(token, dbIds) → Supabase에 암호화 저장 (notion_token, notion_client_db_id 등 컬럼). 5) 에러 처리: 토큰 무효(401), Rate Limit(429), 네트워크 오류 등. 6) 성공 → 'Notion 연동 완료. 대시보드로 이동' 메시지 + 버튼.",
-      "verificationCriteria": "✅ Notion 설정 페이지 UI 렌더링. ✅ Integration Token 입력 후 '연동 테스트' 클릭 → 유효한 토큰 검증 성공. ✅ 무효한 토큰 → 에러 메시지 표시. ✅ '저장' 버튼 클릭 → Supabase에 암호화 저장. ✅ Supabase RLS 정책으로 클라이언트 직접 조회 차단 확인. ✅ 저장 성공 후 '대시보드로 이동' 버튼으로 /dashboard 리다이렉트.",
+      "implementationGuide": "1) npm install @notionhq/client. 2) .env.example에 NOTION_API_KEY (서버 전용, 클라이언트 노출 금지) 설명 추가. 3) src/lib/notion/client.ts: Notion 클라이언트 초기화 (서버 전용 환경에서만), 2개 데이터베이스 ID 상수 정의 (추후 Supabase에서 로드). 4) src/lib/notion/integrations.ts: Integration Token 검증 함수 - searchDatabases(), queryDatabase() 호출해 토큰 유효성 검증. 5) src/lib/notion/utils.ts: 재시도 유틸(exponential backoff, max 3회), Rate Limit 처리(429 상태코드 감지). 6) src/lib/notion/types.ts: Notion API 응답 타입 정의 (Database, Page, Block 등, Invoices/Items용).",
+      "verificationCriteria": "✅ @notionhq/client 설치 및 import 성공. ✅ Notion 클라이언트 초기화 (서버 환경에서만 가능). ✅ testNotionConnection(token) 함수로 토큰 검증 성공. ✅ 토큰 무효 → 에러 메시지 반환. ✅ 재시도 로직 동작 확인 (모의 Rate Limit 테스트). ✅ Invoices/Items 타입 정의 TypeScript strict 모드 통과.",
       "analysisResult": "Phase 1: 인증 기반 & Notion 연동 설계 (2026-07-02 ~ 2026-07-15, 약 2주). 목표: 실제 로그인이 가능한 상태를 만들고, Notion을 데이터 백엔드로 쓰기 위한 계정-토큰-DB 구조를 확정. 우선순위: MUST. 이 페이즈가 끝나야 이후 모든 기능이 진짜 데이터로 동작 가능."
     },
     {

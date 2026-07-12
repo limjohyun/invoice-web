@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
 
 import { loginSchema, type LoginFormData } from '@/lib/schemas/auth'
+import { signIn } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -27,7 +29,10 @@ import {
 } from '@/components/ui/form'
 
 export function LoginForm() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -39,9 +44,32 @@ export function LoginForm() {
     mode: 'onChange',
   })
 
-  // TODO: 실제 인증 백엔드 연동 시 이 함수에서 로그인 API를 호출합니다.
-  function onSubmit() {
-    // 인증 로직 연동 전까지는 별도 처리가 없습니다.
+  /**
+   * 로그인 제출 핸들러
+   * signIn Server Action을 호출하고 결과에 따라 리다이렉트
+   */
+  async function onSubmit(data: LoginFormData) {
+    setIsLoading(true)
+    setSubmitError(null)
+
+    try {
+      const result = await signIn(data)
+
+      if (!result.success) {
+        setSubmitError(result.error?.message || '로그인에 실패했습니다.')
+        return
+      }
+
+      // 로그인 성공 - 리다이렉트
+      if (result.redirect) {
+        router.push(result.redirect)
+      }
+    } catch (error) {
+      console.error('로그인 에러:', error)
+      setSubmitError('예상치 못한 오류가 발생했습니다. 다시 시도해주세요.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -53,6 +81,11 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {submitError && (
+          <div className="bg-destructive/10 text-destructive mb-4 rounded-md p-3 text-sm">
+            {submitError}
+          </div>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -125,8 +158,8 @@ export function LoginForm() {
               )}
             />
 
-            <Button type="submit" className="w-full">
-              로그인하기
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? '로그인 중...' : '로그인하기'}
             </Button>
           </form>
         </Form>
