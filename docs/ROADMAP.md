@@ -6,8 +6,8 @@
 - **목적**: 별도 서버/DB 구축 없이 Notion 데이터베이스를 백엔드로 활용해 1인 사업가·프리랜서·소규모 비즈니스가 견적서를 손쉽게 작성·관리·공유할 수 있게 한다.
 - **기술 스택**: Next.js 15.5.3(App Router + Turbopack), React 19.1.0, TypeScript 5, TailwindCSS v4 + shadcn/ui(new-york), React Hook Form + Zod + Server Actions, Notion API(@notionhq/client), Supabase Auth, @react-pdf/renderer, Vercel
 - **문서 기준일**: 2026-07-02
-- **최종 업데이트**: 2026-07-12 (Phase 1 완료: T1~T6 인증 & 라우트 보호 구현)
-- **현재 상태**: **Phase 1 핵심 완료** (T1~T6) - Supabase Auth 통합, 회원가입/로그인/로그아웃, 라우트 보호(middleware.ts), RLS 정책 SQL 생성. Phase 1 나머지 (Notion 연동 설정 페이지, 로그인 분기 로직)는 T7~T9에서 구현 예정
+- **최종 업데이트**: 2026-07-12 (Phase 1 진행: T1~T7 완료, Notion API 래퍼 + Server Action 구현)
+- **현재 상태**: **Phase 1 87.5% 진행** (T1~T7 완료) - Supabase Auth 통합, 회원가입/로그인/로그아웃, 라우트 보호(middleware.ts), Notion API 래퍼(client/queries/errors/logger), Server Action 구조 완구현. Phase 1 나머지 (Notion 토큰 설정 페이지, 로그인 분기 로직)는 T8~T9에서 구현 예정
 - **예상 개발 기간**: MVP 약 5.5주(2026-07-02 ~ 2026-08-08) + 확장(안정화·배포) 약 3.5주 → **총 약 9주(2026-07-02 ~ 2026-09-04, 버퍼 약 15% 포함)**
 - **팀 구성 권장안**: 풀스택 개발자 1명(전담 구현) — 리소스가 제한적이므로 각 페이즈 내 태스크는 "UI 마크업(목업 데이터) 선(先) 진행 → 백엔드/Notion 연동 후(後) 결합" 순서로 배치해 컨텍스트 전환 비용을 최소화. 코드 리뷰가 필요하면 파트타임 리뷰어 1명 권장(선택)
 
@@ -48,13 +48,26 @@
 - [x] `@supabase/supabase-js`, `@supabase/ssr` 설치 및 클라이언트 분리(`createSupabaseBrowserClient`, `createSupabaseServerClient`, `createSupabaseAdminClient`) **✅ T2/T6**
 - [x] Supabase RLS 정책 SQL 생성(`supabase/sql/profiles_rls.sql`): profiles 테이블 행 수준 보안 설정 **✅ T6**
 - [x] Supabase 세션 타입과 Server Action 간 타입 공유 패턴 정리(`src/lib/schemas/auth.ts`) **✅ T3/T4**
-- [ ] `@notionhq/client` 설치 및 서버 전용 Notion API 래퍼 모듈 설계(`src/lib/notion/client.ts`) **[T7 진행 예정]**
+- [x] `@notionhq/client` 설치 및 서버 전용 Notion API 래퍼 모듈 설계 **✅ T7 완료**
+  - `src/lib/notion/client.ts`: Notion 클라이언트 (타임아웃 5초, 재시도 로직)
+  - `src/lib/notion/errors.ts`: 에러 정규화 + 한국어 메시지
+  - `src/lib/notion/logger.ts`: 구조화 로거 (토큰 마스킹)
+  - `src/lib/notion/constants.ts`: 설정값
+  - `src/lib/notion/queries.ts`: Invoices/Items CRUD 함수
+  - `src/lib/notion/types.ts`: Invoice, Item 타입
+  - `src/lib/notion/mappers.ts`: Notion 응답 매핑
+- [x] Server Action 구조 설계 **✅ T7 완료**
+  - `src/lib/actions/notion.ts`: 9개 함수 (getInvoices, createInvoice, updateInvoice 등)
+  - `src/lib/schemas/invoice.ts`: Zod 검증 스키마
+  - NotionResult 타입 + getNotionContext() 헬퍼
 
 #### 예상 완료 결과물
 
 - ✅ **완료**: 실제 이메일/비밀번호로 가입·로그인·로그아웃이 동작하는 인증 시스템 (T3/T4/T5)
 - ✅ **완료**: Supabase Auth + 쿠키 기반 세션 관리, middleware.ts로 보호된 라우트 구현 (T6)
 - ✅ **완료**: 확정된 Notion DB 스키마 문서 (T1)
+- ✅ **완료**: Notion API 래퍼 모듈 (클라이언트, 에러 처리, CRUD 함수) (T7)
+- ✅ **완료**: Server Action 구조 (9개 함수, Zod 스키마) (T7)
 - ⏳ **진행 중**: Notion Integration Token을 입력하고 연동 테스트에 성공할 수 있는 설정 페이지 (T8)
 
 #### 위험 요소
@@ -258,7 +271,8 @@
 | 마일스톤                       | 예상 완료일       | 상태     | 핵심 산출물                                                                                                    |
 | ------------------------------ | ----------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
 | M1-A: 인증 기반 구축 (T1~T6)   | **✅ 2026-07-12** | **완료** | ✅ Supabase Auth (가입/로그인/로그아웃), ✅ 보호된 라우트 (middleware.ts + RLS 정책), ✅ Notion DB 스키마 확정 |
-| M1-B: Notion 연동 설정 (T7~T9) | 2026-07-15        | 진행 중  | Notion API 래퍼, Notion 토큰 설정 페이지, 로그인 분기 로직                                                     |
+| M1-B: Notion API 래퍼 (T7)     | **✅ 2026-07-12** | **완료** | ✅ Notion 클라이언트 (재시도/타임아웃), ✅ CRUD 함수, ✅ Server Action 구조, ✅ 타입 정의 & Zod 스키마         |
+| M1-C: Notion 토큰 설정 (T8~T9) | 2026-07-15        | 진행 중  | Notion 토큰 설정 페이지, 로그인 분기 로직, E2E 테스트                                                          |
 | M2: 견적서 핵심 CRUD           | 2026-07-29        | 예정     | 대시보드, 견적서 생성/조회/수정/삭제(Notion 실데이터)                                                          |
 | M3: **MVP 출시**               | 2026-08-08        | 예정     | F001~F013 전 기능 완성, PDF 다운로드, 거래처/템플릿 관리                                                       |
 | M4: 안정화                     | 2026-08-22        | 예정     | 스모크 테스트, 에러 처리, 로딩 UX 개선                                                                         |
