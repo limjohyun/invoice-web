@@ -6,8 +6,8 @@
 - **목적**: 별도 서버/DB 구축 없이 Notion 데이터베이스를 백엔드로 활용해 1인 사업가·프리랜서·소규모 비즈니스가 견적서를 손쉽게 작성·관리·공유할 수 있게 한다.
 - **기술 스택**: Next.js 15.5.3(App Router + Turbopack), React 19.1.0, TypeScript 5, TailwindCSS v4 + shadcn/ui(new-york), React Hook Form + Zod + Server Actions, Notion API(@notionhq/client), Supabase Auth, @react-pdf/renderer, Vercel
 - **문서 기준일**: 2026-07-02
-- **최종 업데이트**: 2026-07-16 (Phase 1 진행: T1~T8 완료, Notion 토큰 설정 페이지 구현)
-- **현재 상태**: **Phase 1 88.5% 진행** (T1~T8 완료) - Supabase Auth 통합, 회원가입/로그인/로그아웃, 라우트 보호(middleware.ts), Notion API 래퍼(client/queries/errors/logger), Server Action 구조 완구현, Notion 토큰 설정 페이지(/settings) 완성. Phase 1 마지막 (로그인 분기 로직)은 T9에서 구현 예정
+- **최종 업데이트**: 2026-07-16 (Phase 1 완료: T1~T9 전체 완료)
+- **현재 상태**: **Phase 1 100% 완료** (T1~T9) - Supabase Auth 통합, 회원가입/로그인/로그아웃, 라우트 보호(middleware.ts), Notion API 래퍼(client/queries/errors/logger), Server Action 구조, Notion 토큰 설정 페이지(/settings), 로그인 분기 로직(Notion 연동 여부에 따라 /dashboard 또는 /settings) 모두 완성 + Playwright E2E 테스트로 검증 완료. Phase 2(견적서 CRUD & 대시보드) 진행 가능
 - **예상 개발 기간**: MVP 약 5.5주(2026-07-02 ~ 2026-08-08) + 확장(안정화·배포) 약 3.5주 → **총 약 9주(2026-07-02 ~ 2026-09-04, 버퍼 약 15% 포함)**
 - **팀 구성 권장안**: 풀스택 개발자 1명(전담 구현) — 리소스가 제한적이므로 각 페이즈 내 태스크는 "UI 마크업(목업 데이터) 선(先) 진행 → 백엔드/Notion 연동 후(後) 결합" 순서로 배치해 컨텍스트 전환 비용을 최소화. 코드 리뷰가 필요하면 파트타임 리뷰어 1명 권장(선택)
 
@@ -38,7 +38,7 @@
 - [x] (MUST) F010 회원가입/로그인/로그아웃 — 기존 `login-form.tsx`/`signup-form.tsx`를 Server Action + Supabase Auth로 연결 **✅ T3/T4/T5 완료**
 - [x] (MUST) `middleware.ts` 기반 보호된 라우트(로그인 필요 페이지 접근 제어) **✅ T6 완료**
 - [x] (MUST) F011 Notion 연동 설정 페이지 — Integration Token 입력/저장, 연동 가능 DB 목록 조회, 연결 테스트 UI **✅ T8 완료**
-- [ ] (MUST) 로그인 성공 후 분기 로직: Notion 미연동 → 연동 설정 페이지, 연동 완료 → 대시보드(PRD 사용자 여정 그대로) **[T9 진행 예정]**
+- [x] (MUST) 로그인 성공 후 분기 로직: Notion 미연동 → 연동 설정 페이지, 연동 완료 → 대시보드(PRD 사용자 여정 그대로) **✅ T9 완료**
 
 #### 기술적 준비 작업
 
@@ -69,7 +69,7 @@
 - ✅ **완료**: Notion API 래퍼 모듈 (클라이언트, 에러 처리, CRUD 함수) (T7)
 - ✅ **완료**: Server Action 구조 (9개 함수, Zod 스키마) (T7)
 - ✅ **완료**: Notion Integration Token 입력/저장, DB 목록 조회, 연동 테스트 설정 페이지 (/settings) (T8)
-- ⏳ **진행 중**: 로그인 성공 후 Notion 연동 상태 확인 분기 로직 (T9)
+- ✅ **완료**: 로그인 성공 후 Notion 연동 상태 확인 분기 로직 + Playwright E2E 테스트 3종 (T9)
 
 #### 위험 요소
 
@@ -77,6 +77,16 @@
 - **위험**: Notion Relation은 저장 순서를 보장하지 않음 → **완화**: Sort Order (Number) 필드 추가로 Item 표시 순서 유지
 - **위험**: 거래처 정보를 Invoice 내 텍스트 필드로 저장하면 향후 거래처별 다중 Invoice 조회가 어려움 → **완화**: 현재 소규모 사용 시나리오이므로 수용 가능, 필요 시 향후 Clients DB 분리
 - **위험**: Supabase Auth와 React 19 Server Actions 조합의 세션 갱신(refresh token) 타이밍 이슈 → **완화**: `@supabase/ssr` 공식 Next.js App Router 가이드를 context7로 최신 문서 확인 후 구현
+
+#### T9 E2E 테스트 중 발견 및 수정된 버그 (2026-07-16)
+
+실제 로그인 흐름을 Playwright로 검증하는 과정에서 지금까지 눈에 띄지 않던 버그 3건을 발견하고 수정했다. 세 건 모두 T3~T8이 "완료"로 표시된 이후에도 실제로는 한 번도 끝까지 성공적으로 동작한 적이 없었던 경로였다는 공통점이 있다.
+
+1. **profiles 테이블 스키마가 애플리케이션 코드와 불일치**: 실제 DB에는 `id` 컬럼이 없었고, `notion_access_token`이 Primary Key + NOT NULL로 설정되어 있어 "Notion 미연동 상태"를 표현할 수 없었으며, 컬럼명도 코드와 달랐다(`notion_invoices_db_id` vs `notion_invoice_db_id`). `supabase/sql/profiles_schema_fix.sql`로 수정하고, 회원가입 시 `profiles` 행을 자동 생성하는 트리거(`on_auth_user_created`)를 추가했다.
+2. **로그인 폼 비밀번호 필드 접근성 버그**: `login-form.tsx`에서 `FormControl`의 직계 자식이 `<div>`였던 탓에 `id`가 실제 `Input`이 아닌 `div`에 붙어 label-input 연결이 깨져 있었다. 스크린 리더 사용자에게도 실제로 영향이 있는 버그였다.
+3. **서버 전용 환경 변수가 클라이언트 번들에 노출**: `src/lib/supabase/client.ts`가 서버 전용 값까지 파싱하는 `src/lib/env.ts` 전체를 import하고 있어, 브라우저에서 `SUPABASE_SERVICE_ROLE_KEY` 등이 `undefined`가 되며 ZodError로 `/settings`, `/dashboard` 진입 시 클라이언트 크래시가 발생했다. `NEXT_PUBLIC_` 값만 검증하는 `src/lib/env.client.ts`를 분리해서 해결했다.
+
+**교훈**: Server Action이 `success: true`를 반환해도 DB에 실제로 반영됐는지는 별개 문제다(예: `.update()`가 대상 행 없이 조용히 0행 성공하는 경우). 실제 로그인 → 리다이렉트 → 대상 페이지 렌더링까지 이어지는 E2E 테스트 없이는 이런 버그가 계속 가려져 있었을 것이다.
 
 ---
 
