@@ -22,6 +22,7 @@
  */
 
 import { revalidatePath } from 'next/cache'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { createNotionClient } from '@/lib/notion/client'
 import { normalizeNotionError, withRetry } from '@/lib/notion/errors'
@@ -34,6 +35,7 @@ import {
   queryInvoices,
   queryItemsByInvoice,
   retrieveInvoice,
+  searchAccessibleDatabases,
   updateInvoicePage,
   updateItemPage,
 } from '@/lib/notion/queries'
@@ -159,6 +161,176 @@ function toActionError(label: string, error: unknown): NotionError {
   const normalized = normalizeNotionError(error)
   notionLogger.error(label, { error: normalized })
   return { code: normalized.code, message: normalized.message }
+}
+
+// ───────────────────────── Notion 연동 설정 (F011) ─────────────────────────
+
+type AuthenticatedUserResult =
+  | { ok: true; userId: string; supabase: SupabaseClient }
+  | { ok: false; result: NotionResult<never> }
+
+/**
+ * 로그인 사용자 ID만 확인합니다. getNotionContext()와 달리 Notion 연동(profiles의
+ * notion_access_token 등) 여부는 확인하지 않습니다. Notion 연동 설정(F011)은 아직
+ * 연동되지 않은 사용자도 최초로 호출해야 하는 화면이기 때문입니다.
+ */
+async function getAuthenticatedUserId(): Promise<AuthenticatedUserResult> {
+  const supabase = await createSupabaseServerClient()
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    return {
+      ok: false,
+      result: {
+        success: false,
+        error: { code: 'unauthenticated', message: '로그인이 필요합니다.' },
+      },
+    }
+  }
+
+  return { ok: true, userId: user.id, supabase }
+}
+
+/**
+ * Notion Integration Token의 유효성을 테스트합니다 (F011).
+ * DB 접근 권한이 없어도 통과하는 최소 권한 호출(users.me)로 검증하므로,
+ * 아직 어떤 데이터베이스도 공유되지 않은 토큰도 "유효함"으로 판단할 수 있습니다.
+ *
+ * @returns success는 테스트 자체의 수행 여부, data는 토큰 유효성(true/false)입니다.
+ *   일시적 오류(타임아웃/네트워크 등)로 검증 자체를 완료하지 못한 경우 success: false를 반환합니다.
+ */
+export async function testNotionConnection(
+  token: string
+): Promise<NotionResult<boolean>> {
+  if (!token.trim()) {
+    return {
+      success: false,
+      error: {
+        code: 'validation_error',
+        message: 'Integration Token을 입력해 주세요.',
+      },
+    }
+  }
+
+  try {
+    const client = createNotionClient(token)
+    await withRetry(() => client.users.me({}), 'testNotionConnection')
+    return { success: true, data: true }
+  } catch (error) {
+    const normalized = normalizeNotionError(error)
+
+    if (normalized.code === 'unauthorized') {
+      notionLogger.info('Notion 토큰 검증 결과: 유효하지 않은 토큰', {
+        code: normalized.code,
+      })
+      return { success: true, data: false }
+    }
+
+    notionLogger.error('Notion 연동 테스트 실패', { error: normalized })
+    return {
+      success: false,
+      error: { code: normalized.code, message: normalized.message },
+    }
+  }
+}
+
+/**
+ * 로그인 사용자가 (Integration Token으로) 접근 가능한 Notion 데이터베이스 목록을 조회합니다 (F011).
+ * 설정 페이지에서 견적서/품목 데이터베이스를 선택하는 드롭다운에 사용됩니다.
+ */
+export async function queryNotionDatabases(
+  token: string
+): Promise<NotionResult<Array<{ id: string; title: string }>>> {
+  if (!token.trim()) {
+    return {
+      success: false,
+      error: {
+        code: 'validation_error',
+        message: 'Integration Token을 입력해 주세요.',
+      },
+    }
+  }
+
+  try {
+    const client = createNotionClient(token)
+    const databases = await withRetry(
+      () => searchAccessibleDatabases(client),
+      'queryNotionDatabases'
+    )
+    return { success: true, data: databases }
+  } catch (error) {
+    return {
+      success: false,
+      error: toActionError('Notion 데이터베이스 목록 조회 실패', error),
+    }
+  }
+}
+
+/**
+ * 사용자의 Notion Integration Token과 대상 데이터베이스(견적서/품목) ID를 저장합니다 (F011).
+ * profiles 테이블은 RLS로 본인 행만 수정 가능하므로, 로그인 세션이 반영된 Supabase
+ * 클라이언트(getAuthenticatedUserId)를 그대로 재사용해 정책을 통과합니다.
+ *
+ * 보안 참고: token은 Server Action 인자로만 전달되며, 어떤 로그에도 원문으로
+ * 남기지 않습니다(notionLogger가 token/secret 등의 키를 자동 마스킹합니다).
+ */
+export async function saveNotionToken(
+  token: string,
+  invoicesDbId: string,
+  itemsDbId: string
+): Promise<NotionResult<void>> {
+  if (!token.trim() || !invoicesDbId.trim() || !itemsDbId.trim()) {
+    return {
+      success: false,
+      error: {
+        code: 'validation_error',
+        message:
+          'Integration Token과 견적서/품목 데이터베이스를 모두 선택해 주세요.',
+      },
+    }
+  }
+
+  const auth = await getAuthenticatedUserId()
+  if (!auth.ok) return auth.result
+
+  try {
+    const { error } = await auth.supabase
+      .from('profiles')
+      .update({
+        notion_access_token: token,
+        notion_invoice_db_id: invoicesDbId,
+        notion_items_db_id: itemsDbId,
+      })
+      .eq('id', auth.userId)
+
+    if (error) {
+      notionLogger.error('Notion 연동 정보 저장 실패', { error })
+      return {
+        success: false,
+        error: {
+          code: 'server_error',
+          message: 'Notion 연동 정보를 저장하지 못했습니다. 다시 시도해주세요.',
+        },
+      }
+    }
+
+    revalidatePath('/settings')
+    revalidatePath('/dashboard')
+    return { success: true }
+  } catch (error) {
+    notionLogger.error('Notion 연동 정보 저장 에러', { error })
+    return {
+      success: false,
+      error: {
+        code: 'server_error',
+        message: '서버 오류가 발생했습니다. 다시 시도해주세요.',
+      },
+    }
+  }
 }
 
 // ───────────────────────── 견적서 (Invoice) ─────────────────────────

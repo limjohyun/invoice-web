@@ -1,4 +1,4 @@
-import { isFullDatabase, isFullPage } from '@notionhq/client'
+import { isFullDatabase, isFullDataSource, isFullPage } from '@notionhq/client'
 import type {
   Client,
   CreatePageParameters,
@@ -6,7 +6,7 @@ import type {
   QueryDataSourceParameters,
 } from '@notionhq/client'
 import { NotionOperationError, withRetry } from './errors'
-import { mapPageToInvoice, mapPageToItem } from './mappers'
+import { extractPlainText, mapPageToInvoice, mapPageToItem } from './mappers'
 import type {
   CreateInvoiceInput,
   CreateItemInput,
@@ -340,4 +340,51 @@ export async function archiveItemPage(
     () => client.pages.update({ page_id: itemId, archived: true }),
     'pages.archive(item)'
   )
+}
+
+// ───────────────────────── Notion 연동 설정 (F011) ─────────────────────────
+
+/**
+ * 사용자가 접근 가능한(Integration에 공유된) 모든 Notion 데이터베이스 목록을 검색합니다.
+ *
+ * Notion API(2025-09-03~)의 검색은 데이터베이스가 아닌 "데이터 소스" 단위로 결과를
+ * 반환하므로, 각 데이터 소스의 parent에서 실제 데이터베이스 ID를 추출합니다.
+ * (DatabaseParentResponse/DataSourceParentResponse 모두 database_id 필드를 가집니다.)
+ * 이 프로젝트가 다루는 Invoices/Items DB는 단일 데이터 소스 구조를 가정하므로,
+ * 같은 데이터베이스에 속한 데이터 소스가 여러 개 검색되더라도 첫 번째 항목만 사용합니다.
+ *
+ * @param client 사용자의 Notion Integration Token으로 생성한 클라이언트
+ * @returns 데이터베이스 ID와 제목 목록 (제목이 비어있으면 "(제목 없음)")
+ */
+export async function searchAccessibleDatabases(
+  client: Client
+): Promise<Array<{ id: string; title: string }>> {
+  const seen = new Set<string>()
+  const databases: Array<{ id: string; title: string }> = []
+  let cursor: string | undefined
+
+  do {
+    const response = await client.search({
+      filter: { property: 'object', value: 'data_source' },
+      page_size: 100,
+      start_cursor: cursor,
+    })
+
+    for (const result of response.results) {
+      if (!isFullDataSource(result)) continue
+
+      const databaseId = result.parent.database_id
+      if (seen.has(databaseId)) continue
+      seen.add(databaseId)
+
+      databases.push({
+        id: databaseId,
+        title: extractPlainText(result.title) || '(제목 없음)',
+      })
+    }
+
+    cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined
+  } while (cursor)
+
+  return databases
 }

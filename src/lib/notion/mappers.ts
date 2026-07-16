@@ -6,8 +6,11 @@ import type {
 } from '@notionhq/client'
 import type { Currency, Invoice, InvoiceStatus, Item } from './types'
 
-/** Notion 리치 텍스트 배열을 순수 문자열로 변환합니다. */
-function extractPlainText(
+/**
+ * Notion 리치 텍스트 배열을 순수 문자열로 변환합니다.
+ * queries.ts(예: 데이터베이스 검색 결과의 title)에서도 재사용하기 위해 export합니다.
+ */
+export function extractPlainText(
   richText: RichTextItemResponse[] | undefined
 ): string {
   return (richText ?? []).map(item => item.plain_text).join('')
