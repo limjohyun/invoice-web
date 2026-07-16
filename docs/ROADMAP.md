@@ -6,8 +6,8 @@
 - **목적**: 별도 서버/DB 구축 없이 Notion 데이터베이스를 백엔드로 활용해 1인 사업가·프리랜서·소규모 비즈니스가 견적서를 손쉽게 작성·관리·공유할 수 있게 한다.
 - **기술 스택**: Next.js 15.5.3(App Router + Turbopack), React 19.1.0, TypeScript 5, TailwindCSS v4 + shadcn/ui(new-york), React Hook Form + Zod + Server Actions, Notion API(@notionhq/client), Supabase Auth, @react-pdf/renderer, Vercel
 - **문서 기준일**: 2026-07-02
-- **최종 업데이트**: 2026-07-12 (Phase 1 진행: T1~T7 완료, Notion API 래퍼 + Server Action 구현)
-- **현재 상태**: **Phase 1 87.5% 진행** (T1~T7 완료) - Supabase Auth 통합, 회원가입/로그인/로그아웃, 라우트 보호(middleware.ts), Notion API 래퍼(client/queries/errors/logger), Server Action 구조 완구현. Phase 1 나머지 (Notion 토큰 설정 페이지, 로그인 분기 로직)는 T8~T9에서 구현 예정
+- **최종 업데이트**: 2026-07-16 (Phase 1 진행: T1~T8 완료, Notion 토큰 설정 페이지 구현)
+- **현재 상태**: **Phase 1 88.5% 진행** (T1~T8 완료) - Supabase Auth 통합, 회원가입/로그인/로그아웃, 라우트 보호(middleware.ts), Notion API 래퍼(client/queries/errors/logger), Server Action 구조 완구현, Notion 토큰 설정 페이지(/settings) 완성. Phase 1 마지막 (로그인 분기 로직)은 T9에서 구현 예정
 - **예상 개발 기간**: MVP 약 5.5주(2026-07-02 ~ 2026-08-08) + 확장(안정화·배포) 약 3.5주 → **총 약 9주(2026-07-02 ~ 2026-09-04, 버퍼 약 15% 포함)**
 - **팀 구성 권장안**: 풀스택 개발자 1명(전담 구현) — 리소스가 제한적이므로 각 페이즈 내 태스크는 "UI 마크업(목업 데이터) 선(先) 진행 → 백엔드/Notion 연동 후(後) 결합" 순서로 배치해 컨텍스트 전환 비용을 최소화. 코드 리뷰가 필요하면 파트타임 리뷰어 1명 권장(선택)
 
@@ -37,7 +37,7 @@
 - [x] (MUST) Supabase 프로젝트 생성 및 `@supabase/supabase-js`, `@supabase/ssr` 설치·환경 변수(`src/lib/env.ts`) 확장 **✅ T2 완료**
 - [x] (MUST) F010 회원가입/로그인/로그아웃 — 기존 `login-form.tsx`/`signup-form.tsx`를 Server Action + Supabase Auth로 연결 **✅ T3/T4/T5 완료**
 - [x] (MUST) `middleware.ts` 기반 보호된 라우트(로그인 필요 페이지 접근 제어) **✅ T6 완료**
-- [ ] (MUST) F011 Notion 연동 설정 페이지 — Integration Token 입력/저장, 연동 가능 DB 목록 조회, 연결 테스트 UI **[T8 진행 예정]**
+- [x] (MUST) F011 Notion 연동 설정 페이지 — Integration Token 입력/저장, 연동 가능 DB 목록 조회, 연결 테스트 UI **✅ T8 완료**
 - [ ] (MUST) 로그인 성공 후 분기 로직: Notion 미연동 → 연동 설정 페이지, 연동 완료 → 대시보드(PRD 사용자 여정 그대로) **[T9 진행 예정]**
 
 #### 기술적 준비 작업
@@ -68,7 +68,8 @@
 - ✅ **완료**: 확정된 Notion DB 스키마 문서 (T1)
 - ✅ **완료**: Notion API 래퍼 모듈 (클라이언트, 에러 처리, CRUD 함수) (T7)
 - ✅ **완료**: Server Action 구조 (9개 함수, Zod 스키마) (T7)
-- ⏳ **진행 중**: Notion Integration Token을 입력하고 연동 테스트에 성공할 수 있는 설정 페이지 (T8)
+- ✅ **완료**: Notion Integration Token 입력/저장, DB 목록 조회, 연동 테스트 설정 페이지 (/settings) (T8)
+- ⏳ **진행 중**: 로그인 성공 후 Notion 연동 상태 확인 분기 로직 (T9)
 
 #### 위험 요소
 
