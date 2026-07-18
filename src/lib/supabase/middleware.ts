@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { env } from '@/lib/env'
 
 /** 인증이 필요한 경로 - 미인증 사용자는 /login으로 리다이렉트 */
-const PROTECTED_PATHS = ['/dashboard', '/settings']
+const PROTECTED_PATHS = ['/dashboard', '/settings', '/invoice']
 
 /** 인증된 사용자는 접근할 수 없는 경로 - 로그인 상태면 /settings로 리다이렉트 */
 const AUTH_ONLY_PATHS = ['/login']

@@ -507,3 +507,146 @@ export async function deleteItem(itemId: string): Promise<NotionResult> {
     return { success: false, error: toActionError('품목 삭제 실패', error) }
   }
 }
+
+// ──────────────────── 조합 액션: 견적서 + 품목 한번에 처리 (F002/F004) ────────────────────
+
+/** 폼에서 제출하는 품목 1건 (invoiceId는 서버에서 채움) */
+export type InvoiceItemDraft = Omit<CreateItemInput, 'invoiceId'>
+
+/** 수정 폼에서 제출하는 품목 1건 (id가 있으면 기존 품목 수정, 없으면 신규 생성) */
+export type InvoiceItemDraftWithId = InvoiceItemDraft & { id?: string }
+
+/**
+ * 새 견적서와 품목을 한 번에 생성합니다 (F002, F006).
+ * Notion에는 여러 페이지 생성을 묶는 트랜잭션이 없으므로, 품목 생성 중 하나라도
+ * 실패하면 이미 만든 항목(견적서 + 생성된 품목)을 모두 archive해 되돌립니다.
+ */
+export async function createInvoiceWithItems(
+  invoiceInput: CreateInvoiceInput,
+  items: InvoiceItemDraft[]
+): Promise<NotionResult<InvoiceWithItems>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  const client = createNotionClient(context.context.accessToken)
+  let invoice: Invoice | undefined
+  const createdItems: Item[] = []
+
+  try {
+    invoice = await createInvoicePage(
+      client,
+      context.context.invoiceDbId,
+      invoiceInput
+    )
+
+    for (const item of items) {
+      const created = await createItemPage(client, context.context.itemsDbId, {
+        ...item,
+        invoiceId: invoice.id,
+      })
+      createdItems.push(created)
+    }
+
+    revalidatePath('/dashboard')
+    return { success: true, data: { ...invoice, items: createdItems } }
+  } catch (error) {
+    // 보상 처리: 이미 생성된 품목/견적서를 archive해 부분 생성 상태로 남지 않게 한다.
+    await Promise.allSettled(
+      createdItems.map(item => archiveItemPage(client, item.id))
+    )
+    if (invoice) {
+      await Promise.allSettled([archiveInvoicePage(client, invoice.id)])
+    }
+    return { success: false, error: toActionError('견적서 생성 실패', error) }
+  }
+}
+
+/**
+ * 기존 견적서와 품목을 한 번에 수정합니다 (F004, F006).
+ * 품목은 id 유무로 생성/수정/삭제를 구분합니다: id 없음 → 신규 생성,
+ * id 있고 기존에 존재 → 수정, 기존 품목 중 폼에서 빠진 것 → archive(삭제).
+ * 품목 저장 중 일부가 실패해도 나머지는 계속 진행하고, 실패 개수를 알려 재시도를 유도합니다.
+ */
+export async function updateInvoiceWithItems(
+  invoiceId: string,
+  invoiceInput: UpdateInvoiceInput,
+  items: InvoiceItemDraftWithId[]
+): Promise<NotionResult<InvoiceWithItems>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  const client = createNotionClient(context.context.accessToken)
+
+  try {
+    await updateInvoicePage(client, invoiceId, invoiceInput)
+
+    const existingItems = await queryItemsByInvoice(
+      client,
+      context.context.itemsDbId,
+      invoiceId
+    )
+    const existingIds = new Set(existingItems.map(item => item.id))
+    const formIds = new Set(items.filter(item => item.id).map(item => item.id))
+
+    const toCreate = items.filter(item => !item.id)
+    const toUpdate = items.filter(
+      (item): item is InvoiceItemDraftWithId & { id: string } =>
+        Boolean(item.id) && existingIds.has(item.id as string)
+    )
+    const toDelete = existingItems.filter(item => !formIds.has(item.id))
+
+    let failureCount = 0
+
+    for (const item of toCreate) {
+      try {
+        await createItemPage(client, context.context.itemsDbId, {
+          ...item,
+          invoiceId,
+        })
+      } catch (error) {
+        failureCount += 1
+        notionLogger.error('품목 생성 실패(견적서 수정 중)', { error })
+      }
+    }
+    for (const item of toUpdate) {
+      try {
+        const { id, ...input } = item
+        await updateItemPage(client, id, input)
+      } catch (error) {
+        failureCount += 1
+        notionLogger.error('품목 수정 실패(견적서 수정 중)', { error })
+      }
+    }
+    for (const item of toDelete) {
+      try {
+        await archiveItemPage(client, item.id)
+      } catch (error) {
+        failureCount += 1
+        notionLogger.error('품목 삭제 실패(견적서 수정 중)', { error })
+      }
+    }
+
+    revalidatePath('/dashboard')
+    revalidatePath(`/invoice/${invoiceId}`)
+
+    const [invoice, finalItems] = await Promise.all([
+      retrieveInvoice(client, invoiceId),
+      queryItemsByInvoice(client, context.context.itemsDbId, invoiceId),
+    ])
+
+    if (failureCount > 0) {
+      return {
+        success: false,
+        error: {
+          code: 'partial_item_failure',
+          message: `품목 ${failureCount}건 저장에 실패했습니다. 다시 시도해 주세요.`,
+        },
+        data: { ...invoice, items: finalItems },
+      }
+    }
+
+    return { success: true, data: { ...invoice, items: finalItems } }
+  } catch (error) {
+    return { success: false, error: toActionError('견적서 수정 실패', error) }
+  }
+}

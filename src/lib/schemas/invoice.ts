@@ -3,6 +3,8 @@ import { CURRENCY_VALUES, INVOICE_STATUS_VALUES } from '@/lib/notion/types'
 
 /** 견적서 내 품목 1건에 대한 입력 검증 스키마 */
 export const invoiceItemSchema = z.object({
+  /** 기존 품목 수정 시에만 존재 (Notion 페이지 ID). 신규 품목은 없음 */
+  id: z.string().optional(),
   name: z.string().min(1, '품목명을 입력해 주세요.'),
   description: z.string().optional(),
   quantity: z
