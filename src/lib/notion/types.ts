@@ -90,6 +90,63 @@ export interface CreateItemInput {
 /** 품목 수정 입력 (소속 견적서는 변경 불가) */
 export type UpdateItemInput = Partial<Omit<CreateItemInput, 'invoiceId'>>
 
+/** 거래처 (Clients DB 1개 페이지) */
+export interface Client {
+  id: string
+  name: string
+  contactPerson: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+  registrationNumber: string | null
+  notes: string | null
+  createdAt: string
+  modifiedAt: string
+}
+
+/** 거래처 생성 입력 */
+export interface CreateClientInput {
+  name: string
+  contactPerson?: string
+  email?: string
+  phone?: string
+  address?: string
+  registrationNumber?: string
+  notes?: string
+}
+
+/** 거래처 수정 입력 (부분 업데이트 허용) */
+export type UpdateClientInput = Partial<CreateClientInput>
+
+/** 템플릿에 저장된 품목 1건 (Invoice Item과 달리 Notion 페이지가 아니라 JSON으로 직렬화되는 값) */
+export interface TemplateItem {
+  name: string
+  description?: string
+  quantity: number
+  unitPrice: number
+  taxRate?: number
+}
+
+/** 견적서 템플릿 (Templates DB 1개 페이지) */
+export interface Template {
+  id: string
+  name: string
+  description: string | null
+  items: TemplateItem[]
+  createdAt: string
+  modifiedAt: string
+}
+
+/** 템플릿 생성 입력 */
+export interface CreateTemplateInput {
+  name: string
+  description?: string
+  items: TemplateItem[]
+}
+
+/** 템플릿 수정 입력 (부분 업데이트 허용) */
+export type UpdateTemplateInput = Partial<CreateTemplateInput>
+
 /**
  * 사용자별 Notion 연동 정보
  * profiles 테이블(Supabase)에 저장되며, 사용자가 F011 설정 페이지에서 등록합니다.
@@ -98,4 +155,6 @@ export interface NotionConnection {
   accessToken: string
   invoiceDatabaseId: string
   itemsDatabaseId: string
+  clientsDatabaseId: string
+  templatesDatabaseId: string
 }

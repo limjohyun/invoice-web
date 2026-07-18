@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 
-import { getInvoice } from '@/lib/actions/notion'
+import { getClients, getInvoice, getTemplates } from '@/lib/actions/notion'
 import type { InvoiceFormData } from '@/lib/schemas/invoice'
 import { InvoiceForm } from '@/components/invoice/invoice-form'
 
@@ -18,7 +18,11 @@ export default async function InvoiceEditPage({
   params,
 }: InvoiceEditPageProps) {
   const { id } = await params
-  const result = await getInvoice(id)
+  const [result, clientsResult, templatesResult] = await Promise.all([
+    getInvoice(id),
+    getClients(),
+    getTemplates(),
+  ])
 
   if (!result.success || !result.data) {
     return (
@@ -65,6 +69,8 @@ export default async function InvoiceEditPage({
         mode="edit"
         invoiceId={invoice.id}
         defaultValues={defaultValues}
+        clients={clientsResult.success ? (clientsResult.data ?? []) : []}
+        templates={templatesResult.success ? (templatesResult.data ?? []) : []}
       />
     </div>
   )

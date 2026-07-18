@@ -4,7 +4,15 @@ import type {
   PageObjectResponse,
   RichTextItemResponse,
 } from '@notionhq/client'
-import type { Currency, Invoice, InvoiceStatus, Item } from './types'
+import type {
+  Client,
+  Currency,
+  Invoice,
+  InvoiceStatus,
+  Item,
+  Template,
+  TemplateItem,
+} from './types'
 
 /**
  * Notion 리치 텍스트 배열을 순수 문자열로 변환합니다.
@@ -179,6 +187,121 @@ export function mapPageToItem(
     taxRate,
     sortOrder,
     amount,
+    createdAt: page.created_time,
+    modifiedAt: page.last_edited_time,
+  }
+}
+
+/**
+ * Notion Clients DB의 한 페이지(PageObjectResponse)를 Client 도메인 타입으로 변환합니다.
+ */
+export function mapPageToClient(
+  response: GetPageResponse | PageObjectResponse
+): Client {
+  const page = assertFullPage(response)
+  const props = page.properties
+
+  const nameProp = props['거래처명']
+  const name =
+    nameProp?.type === 'title' ? extractPlainText(nameProp.title) : ''
+
+  const contactPersonProp = props['담당자']
+  const contactPerson =
+    contactPersonProp?.type === 'rich_text'
+      ? extractPlainText(contactPersonProp.rich_text) || null
+      : null
+
+  const emailProp = props['이메일']
+  const email = emailProp?.type === 'email' ? emailProp.email : null
+
+  const phoneProp = props['전화번호']
+  const phone =
+    phoneProp?.type === 'phone_number' ? phoneProp.phone_number : null
+
+  const addressProp = props['주소']
+  const address =
+    addressProp?.type === 'rich_text'
+      ? extractPlainText(addressProp.rich_text) || null
+      : null
+
+  const registrationProp = props['사업자등록번호']
+  const registrationNumber =
+    registrationProp?.type === 'rich_text'
+      ? extractPlainText(registrationProp.rich_text) || null
+      : null
+
+  const notesProp = props['메모']
+  const notes =
+    notesProp?.type === 'rich_text'
+      ? extractPlainText(notesProp.rich_text) || null
+      : null
+
+  return {
+    id: page.id,
+    name,
+    contactPerson,
+    email,
+    phone,
+    address,
+    registrationNumber,
+    notes,
+    createdAt: page.created_time,
+    modifiedAt: page.last_edited_time,
+  }
+}
+
+/**
+ * 템플릿의 품목(JSON 직렬화된 rich_text)을 안전하게 파싱합니다.
+ * 파싱에 실패하거나 형식이 배열이 아니면 빈 배열로 폴백합니다.
+ */
+function parseTemplateItems(raw: string): TemplateItem[] {
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (item): item is TemplateItem =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof item.name === 'string' &&
+        typeof item.quantity === 'number' &&
+        typeof item.unitPrice === 'number'
+    )
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Notion Templates DB의 한 페이지(PageObjectResponse)를 Template 도메인 타입으로 변환합니다.
+ * 품목은 Notion 페이지가 아니라 rich_text에 JSON 문자열로 직렬화되어 저장됩니다.
+ */
+export function mapPageToTemplate(
+  response: GetPageResponse | PageObjectResponse
+): Template {
+  const page = assertFullPage(response)
+  const props = page.properties
+
+  const nameProp = props['템플릿명']
+  const name =
+    nameProp?.type === 'title' ? extractPlainText(nameProp.title) : ''
+
+  const descriptionProp = props['설명']
+  const description =
+    descriptionProp?.type === 'rich_text'
+      ? extractPlainText(descriptionProp.rich_text) || null
+      : null
+
+  const itemsProp = props['품목']
+  const items =
+    itemsProp?.type === 'rich_text'
+      ? parseTemplateItems(extractPlainText(itemsProp.rich_text))
+      : []
+
+  return {
+    id: page.id,
+    name,
+    description,
+    items,
     createdAt: page.created_time,
     modifiedAt: page.last_edited_time,
   }

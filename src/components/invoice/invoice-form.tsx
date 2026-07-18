@@ -8,7 +8,12 @@ import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 
 import { invoiceSchema, type InvoiceFormData } from '@/lib/schemas/invoice'
-import { CURRENCY_VALUES, INVOICE_STATUS_VALUES } from '@/lib/notion/types'
+import {
+  CURRENCY_VALUES,
+  INVOICE_STATUS_VALUES,
+  type Client,
+  type Template,
+} from '@/lib/notion/types'
 import {
   createInvoiceWithItems,
   updateInvoiceWithItems,
@@ -44,6 +49,8 @@ import { INVOICE_STATUS_LABEL } from '@/components/invoice/invoice-status-badge'
 import { InvoiceItemRow } from '@/components/invoice/invoice-item-row'
 import { InvoiceTotals } from '@/components/invoice/invoice-totals'
 import { DueDatePicker } from '@/components/invoice/due-date-picker'
+import { ClientPicker } from '@/components/invoice/client-picker'
+import { TemplatePicker } from '@/components/invoice/template-picker'
 
 const EMPTY_ITEM = {
   name: '',
@@ -54,9 +61,13 @@ const EMPTY_ITEM = {
   sortOrder: 0,
 } satisfies InvoiceFormData['items'][number]
 
-type InvoiceFormProps =
+type InvoiceFormProps = {
+  clients: Client[]
+  templates: Template[]
+} & (
   | { mode: 'create' }
   | { mode: 'edit'; invoiceId: string; defaultValues: InvoiceFormData }
+)
 
 /**
  * 견적서 작성(F002)/수정(F004) 공용 폼.
@@ -66,6 +77,7 @@ type InvoiceFormProps =
 export function InvoiceForm(props: InvoiceFormProps) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { clients, templates } = props
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
@@ -88,10 +100,31 @@ export function InvoiceForm(props: InvoiceFormProps) {
     mode: 'onChange',
   })
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: 'items',
   })
+
+  function handleSelectClient(client: Client) {
+    form.setValue('clientName', client.name, { shouldValidate: true })
+    form.setValue('clientEmail', client.email ?? '', { shouldValidate: true })
+    form.setValue('clientPhone', client.phone ?? '')
+    form.setValue('clientAddress', client.address ?? '')
+    form.setValue('clientRegistrationNumber', client.registrationNumber ?? '')
+  }
+
+  function handleSelectTemplate(template: Template) {
+    replace(
+      template.items.map((item, index) => ({
+        name: item.name,
+        description: item.description ?? '',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        taxRate: item.taxRate,
+        sortOrder: index,
+      }))
+    )
+  }
 
   const itemsError = form.formState.errors.items?.message
 
@@ -156,8 +189,9 @@ export function InvoiceForm(props: InvoiceFormProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>견적서 정보</CardTitle>
+            <ClientPicker clients={clients} onSelect={handleSelectClient} />
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <FormField
@@ -325,16 +359,22 @@ export function InvoiceForm(props: InvoiceFormProps) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>품목</CardTitle>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1"
-              onClick={() => append({ ...EMPTY_ITEM })}
-            >
-              <Plus className="size-4" />
-              품목 추가
-            </Button>
+            <div className="flex gap-2">
+              <TemplatePicker
+                templates={templates}
+                onSelect={handleSelectTemplate}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                onClick={() => append({ ...EMPTY_ITEM })}
+              >
+                <Plus className="size-4" />
+                품목 추가
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <Table>

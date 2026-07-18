@@ -12,7 +12,14 @@
  *   /invoice/[id]/edit        → getInvoice(id) + updateInvoice(id, input) (F004, F006)
  *   견적서 상세 페이지 내 삭제 버튼 → deleteInvoice(id)        (F005, F006)
  *   견적서 작성/수정 페이지 내 품목 편집 → getItems / createItem / updateItem / deleteItem
- * (거래처/템플릿 라우트는 F012/F013 구현 시점인 Phase 3에서 별도 설계)
+ *   /clients                → getClients()                 (F012)
+ *   /clients/create          → createClient(input)           (F012)
+ *   /clients/[id]/edit        → getClient(id) + updateClient(id, input) (F012)
+ *   거래처 목록 페이지 내 삭제 버튼 → deleteClient(id)          (F012)
+ *   /templates               → getTemplates()                (F013)
+ *   /templates/create         → createTemplate(input)         (F013)
+ *   /templates/[id]/edit       → getTemplate(id) + updateTemplate(id, input) (F013)
+ *   템플릿 목록 페이지 내 삭제 버튼 → deleteTemplate(id)         (F013)
  * ─────────────────────────────────────────────────────────────────────────
  *
  * 공통 패턴 (src/lib/actions/auth.ts와 동일한 구조를 따름):
@@ -28,25 +35,41 @@ import { createNotionClient } from '@/lib/notion/client'
 import { normalizeNotionError, withRetry } from '@/lib/notion/errors'
 import { notionLogger } from '@/lib/notion/logger'
 import {
+  archiveClientPage,
   archiveInvoicePage,
   archiveItemPage,
+  archiveTemplatePage,
+  createClientPage,
   createInvoicePage,
   createItemPage,
+  createTemplatePage,
+  queryClients,
   queryInvoices,
   queryItemsByInvoice,
+  queryTemplates,
+  retrieveClient,
   retrieveInvoice,
+  retrieveTemplate,
   searchAccessibleDatabases,
+  updateClientPage,
   updateInvoicePage,
   updateItemPage,
+  updateTemplatePage,
 } from '@/lib/notion/queries'
 import type {
+  Client,
+  CreateClientInput,
   CreateInvoiceInput,
   CreateItemInput,
+  CreateTemplateInput,
   Invoice,
   InvoiceWithItems,
   Item,
+  Template,
+  UpdateClientInput,
   UpdateInvoiceInput,
   UpdateItemInput,
+  UpdateTemplateInput,
 } from '@/lib/notion/types'
 
 export type NotionError = {
@@ -65,6 +88,8 @@ type NotionContext = {
   accessToken: string
   invoiceDbId: string
   itemsDbId: string
+  clientsDbId: string
+  templatesDbId: string
 }
 
 type NotionContextResult =
@@ -98,7 +123,9 @@ async function getNotionContext(): Promise<NotionContextResult> {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('notion_access_token, notion_invoice_db_id, notion_items_db_id')
+      .select(
+        'notion_access_token, notion_invoice_db_id, notion_items_db_id, notion_clients_db_id, notion_templates_db_id'
+      )
       .eq('id', user.id)
       .single()
 
@@ -115,7 +142,12 @@ async function getNotionContext(): Promise<NotionContextResult> {
       }
     }
 
-    if (!profile.notion_invoice_db_id || !profile.notion_items_db_id) {
+    if (
+      !profile.notion_invoice_db_id ||
+      !profile.notion_items_db_id ||
+      !profile.notion_clients_db_id ||
+      !profile.notion_templates_db_id
+    ) {
       return {
         ok: false,
         result: {
@@ -136,6 +168,8 @@ async function getNotionContext(): Promise<NotionContextResult> {
         accessToken: profile.notion_access_token,
         invoiceDbId: profile.notion_invoice_db_id,
         itemsDbId: profile.notion_items_db_id,
+        clientsDbId: profile.notion_clients_db_id,
+        templatesDbId: profile.notion_templates_db_id,
       },
     }
   } catch (error) {
@@ -278,18 +312,31 @@ export async function queryNotionDatabases(
  * 보안 참고: token은 Server Action 인자로만 전달되며, 어떤 로그에도 원문으로
  * 남기지 않습니다(notionLogger가 token/secret 등의 키를 자동 마스킹합니다).
  */
-export async function saveNotionToken(
-  token: string,
-  invoicesDbId: string,
+export interface SaveNotionTokenInput {
+  token: string
+  invoicesDbId: string
   itemsDbId: string
+  clientsDbId: string
+  templatesDbId: string
+}
+
+export async function saveNotionToken(
+  input: SaveNotionTokenInput
 ): Promise<NotionResult<void>> {
-  if (!token.trim() || !invoicesDbId.trim() || !itemsDbId.trim()) {
+  const { token, invoicesDbId, itemsDbId, clientsDbId, templatesDbId } = input
+
+  if (
+    !token.trim() ||
+    !invoicesDbId.trim() ||
+    !itemsDbId.trim() ||
+    !clientsDbId.trim() ||
+    !templatesDbId.trim()
+  ) {
     return {
       success: false,
       error: {
         code: 'validation_error',
-        message:
-          'Integration Token과 견적서/품목 데이터베이스를 모두 선택해 주세요.',
+        message: 'Integration Token과 4개 데이터베이스를 모두 선택해 주세요.',
       },
     }
   }
@@ -304,6 +351,8 @@ export async function saveNotionToken(
         notion_access_token: token,
         notion_invoice_db_id: invoicesDbId,
         notion_items_db_id: itemsDbId,
+        notion_clients_db_id: clientsDbId,
+        notion_templates_db_id: templatesDbId,
       })
       .eq('id', auth.userId)
 
@@ -505,6 +554,204 @@ export async function deleteItem(itemId: string): Promise<NotionResult> {
     return { success: true }
   } catch (error) {
     return { success: false, error: toActionError('품목 삭제 실패', error) }
+  }
+}
+
+// ───────────────────────── 거래처 (Client, F012) ─────────────────────────
+
+/** 로그인 사용자의 거래처 목록 조회 (F012) */
+export async function getClients(): Promise<NotionResult<Client[]>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const client = createNotionClient(context.context.accessToken)
+    const clients = await withRetry(
+      () => queryClients(client, context.context.clientsDbId),
+      'getClients'
+    )
+    return { success: true, data: clients }
+  } catch (error) {
+    return {
+      success: false,
+      error: toActionError('거래처 목록 조회 실패', error),
+    }
+  }
+}
+
+/** 거래처 단건 조회 (F012) */
+export async function getClient(
+  clientId: string
+): Promise<NotionResult<Client>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const notionClient = createNotionClient(context.context.accessToken)
+    const client = await withRetry(
+      () => retrieveClient(notionClient, clientId),
+      'getClient'
+    )
+    return { success: true, data: client }
+  } catch (error) {
+    return {
+      success: false,
+      error: toActionError('거래처 상세 조회 실패', error),
+    }
+  }
+}
+
+/** 새 거래처 생성 (F012) */
+export async function createClient(
+  input: CreateClientInput
+): Promise<NotionResult<Client>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const notionClient = createNotionClient(context.context.accessToken)
+    const client = await createClientPage(
+      notionClient,
+      context.context.clientsDbId,
+      input
+    )
+    revalidatePath('/clients')
+    return { success: true, data: client }
+  } catch (error) {
+    return { success: false, error: toActionError('거래처 생성 실패', error) }
+  }
+}
+
+/** 기존 거래처 수정 (F012) */
+export async function updateClient(
+  clientId: string,
+  input: UpdateClientInput
+): Promise<NotionResult<Client>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const notionClient = createNotionClient(context.context.accessToken)
+    const client = await updateClientPage(notionClient, clientId, input)
+    revalidatePath('/clients')
+    return { success: true, data: client }
+  } catch (error) {
+    return { success: false, error: toActionError('거래처 수정 실패', error) }
+  }
+}
+
+/** 거래처 삭제 (F012) */
+export async function deleteClient(clientId: string): Promise<NotionResult> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const notionClient = createNotionClient(context.context.accessToken)
+    await archiveClientPage(notionClient, clientId)
+    revalidatePath('/clients')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: toActionError('거래처 삭제 실패', error) }
+  }
+}
+
+// ───────────────────────── 템플릿 (Template, F013) ─────────────────────────
+
+/** 로그인 사용자의 템플릿 목록 조회 (F013) */
+export async function getTemplates(): Promise<NotionResult<Template[]>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const client = createNotionClient(context.context.accessToken)
+    const templates = await withRetry(
+      () => queryTemplates(client, context.context.templatesDbId),
+      'getTemplates'
+    )
+    return { success: true, data: templates }
+  } catch (error) {
+    return {
+      success: false,
+      error: toActionError('템플릿 목록 조회 실패', error),
+    }
+  }
+}
+
+/** 템플릿 단건 조회 (F013) */
+export async function getTemplate(
+  templateId: string
+): Promise<NotionResult<Template>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const client = createNotionClient(context.context.accessToken)
+    const template = await withRetry(
+      () => retrieveTemplate(client, templateId),
+      'getTemplate'
+    )
+    return { success: true, data: template }
+  } catch (error) {
+    return {
+      success: false,
+      error: toActionError('템플릿 상세 조회 실패', error),
+    }
+  }
+}
+
+/** 새 템플릿 생성 (F013) */
+export async function createTemplate(
+  input: CreateTemplateInput
+): Promise<NotionResult<Template>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const client = createNotionClient(context.context.accessToken)
+    const template = await createTemplatePage(
+      client,
+      context.context.templatesDbId,
+      input
+    )
+    revalidatePath('/templates')
+    return { success: true, data: template }
+  } catch (error) {
+    return { success: false, error: toActionError('템플릿 생성 실패', error) }
+  }
+}
+
+/** 기존 템플릿 수정 (F013) */
+export async function updateTemplate(
+  templateId: string,
+  input: UpdateTemplateInput
+): Promise<NotionResult<Template>> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const client = createNotionClient(context.context.accessToken)
+    const template = await updateTemplatePage(client, templateId, input)
+    revalidatePath('/templates')
+    return { success: true, data: template }
+  } catch (error) {
+    return { success: false, error: toActionError('템플릿 수정 실패', error) }
+  }
+}
+
+/** 템플릿 삭제 (F013) */
+export async function deleteTemplate(
+  templateId: string
+): Promise<NotionResult> {
+  const context = await getNotionContext()
+  if (!context.ok) return context.result
+
+  try {
+    const client = createNotionClient(context.context.accessToken)
+    await archiveTemplatePage(client, templateId)
+    revalidatePath('/templates')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: toActionError('템플릿 삭제 실패', error) }
   }
 }
 

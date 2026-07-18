@@ -6,14 +6,26 @@ import type {
   QueryDataSourceParameters,
 } from '@notionhq/client'
 import { NotionOperationError, withRetry } from './errors'
-import { extractPlainText, mapPageToInvoice, mapPageToItem } from './mappers'
+import {
+  extractPlainText,
+  mapPageToClient,
+  mapPageToInvoice,
+  mapPageToItem,
+  mapPageToTemplate,
+} from './mappers'
 import type {
+  Client as ClientRecord,
+  CreateClientInput,
   CreateInvoiceInput,
   CreateItemInput,
+  CreateTemplateInput,
   Invoice,
   Item,
+  Template,
+  UpdateClientInput,
   UpdateInvoiceInput,
   UpdateItemInput,
+  UpdateTemplateInput,
 } from './types'
 
 /** Notion 페이지 생성/수정 요청의 properties 값 타입 (SDK 내부 타입 재사용) */
@@ -387,4 +399,231 @@ export async function searchAccessibleDatabases(
   } while (cursor)
 
   return databases
+}
+
+// ───────────────────────── 거래처 (Client) ─────────────────────────
+
+/** Client 입력값을 Notion Clients DB 속성 요청 객체로 변환합니다. */
+function buildClientProperties(
+  input: Partial<CreateClientInput>
+): NotionProperties {
+  const properties: NotionProperties = {}
+
+  if (input.name !== undefined) {
+    properties['거래처명'] = { title: [{ text: { content: input.name } }] }
+  }
+  if (input.contactPerson !== undefined) {
+    properties['담당자'] = {
+      rich_text: [{ text: { content: input.contactPerson } }],
+    }
+  }
+  if (input.email !== undefined) {
+    properties['이메일'] = { email: input.email || null }
+  }
+  if (input.phone !== undefined) {
+    properties['전화번호'] = { phone_number: input.phone || null }
+  }
+  if (input.address !== undefined) {
+    properties['주소'] = {
+      rich_text: [{ text: { content: input.address } }],
+    }
+  }
+  if (input.registrationNumber !== undefined) {
+    properties['사업자등록번호'] = {
+      rich_text: [{ text: { content: input.registrationNumber } }],
+    }
+  }
+  if (input.notes !== undefined) {
+    properties['메모'] = { rich_text: [{ text: { content: input.notes } }] }
+  }
+
+  return properties
+}
+
+/** 거래처 목록 조회 (최근 생성 순) */
+export async function queryClients(
+  client: Client,
+  clientsDatabaseId: string
+): Promise<ClientRecord[]> {
+  const dataSourceId = await resolveDataSourceId(client, clientsDatabaseId)
+
+  const queryArgs: QueryDataSourceParameters = {
+    data_source_id: dataSourceId,
+    sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+  }
+  const pages = await withRetry(
+    () => collectAllDataSourcePages(client, queryArgs),
+    'dataSources.query(clients)'
+  )
+
+  return pages.map(mapPageToClient)
+}
+
+/** 거래처 단건 조회 */
+export async function retrieveClient(
+  client: Client,
+  clientId: string
+): Promise<ClientRecord> {
+  const response = await withRetry(
+    () => client.pages.retrieve({ page_id: clientId }),
+    'pages.retrieve(client)'
+  )
+  return mapPageToClient(response)
+}
+
+/** 거래처 생성 */
+export async function createClientPage(
+  client: Client,
+  clientsDatabaseId: string,
+  input: CreateClientInput
+): Promise<ClientRecord> {
+  const dataSourceId = await resolveDataSourceId(client, clientsDatabaseId)
+
+  const response = await withRetry(
+    () =>
+      client.pages.create({
+        parent: { data_source_id: dataSourceId },
+        properties: buildClientProperties(input),
+      }),
+    'pages.create(client)'
+  )
+
+  return mapPageToClient(response)
+}
+
+/** 거래처 수정 (부분 업데이트) */
+export async function updateClientPage(
+  client: Client,
+  clientId: string,
+  input: UpdateClientInput
+): Promise<ClientRecord> {
+  const response = await withRetry(
+    () =>
+      client.pages.update({
+        page_id: clientId,
+        properties: buildClientProperties(input),
+      }),
+    'pages.update(client)'
+  )
+
+  return mapPageToClient(response)
+}
+
+/** 거래처 삭제 (보관 처리) */
+export async function archiveClientPage(
+  client: Client,
+  clientId: string
+): Promise<void> {
+  await withRetry(
+    () => client.pages.update({ page_id: clientId, archived: true }),
+    'pages.archive(client)'
+  )
+}
+
+// ───────────────────────── 템플릿 (Template) ─────────────────────────
+
+/**
+ * Template 입력값을 Notion Templates DB 속성 요청 객체로 변환합니다.
+ * 품목은 별도 Notion 페이지가 아니라 JSON 문자열로 직렬화해 rich_text에 저장합니다.
+ */
+function buildTemplateProperties(
+  input: Partial<CreateTemplateInput>
+): NotionProperties {
+  const properties: NotionProperties = {}
+
+  if (input.name !== undefined) {
+    properties['템플릿명'] = { title: [{ text: { content: input.name } }] }
+  }
+  if (input.description !== undefined) {
+    properties['설명'] = {
+      rich_text: [{ text: { content: input.description } }],
+    }
+  }
+  if (input.items !== undefined) {
+    properties['품목'] = {
+      rich_text: [{ text: { content: JSON.stringify(input.items) } }],
+    }
+  }
+
+  return properties
+}
+
+/** 템플릿 목록 조회 (최근 생성 순) */
+export async function queryTemplates(
+  client: Client,
+  templatesDatabaseId: string
+): Promise<Template[]> {
+  const dataSourceId = await resolveDataSourceId(client, templatesDatabaseId)
+
+  const queryArgs: QueryDataSourceParameters = {
+    data_source_id: dataSourceId,
+    sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+  }
+  const pages = await withRetry(
+    () => collectAllDataSourcePages(client, queryArgs),
+    'dataSources.query(templates)'
+  )
+
+  return pages.map(mapPageToTemplate)
+}
+
+/** 템플릿 단건 조회 */
+export async function retrieveTemplate(
+  client: Client,
+  templateId: string
+): Promise<Template> {
+  const response = await withRetry(
+    () => client.pages.retrieve({ page_id: templateId }),
+    'pages.retrieve(template)'
+  )
+  return mapPageToTemplate(response)
+}
+
+/** 템플릿 생성 */
+export async function createTemplatePage(
+  client: Client,
+  templatesDatabaseId: string,
+  input: CreateTemplateInput
+): Promise<Template> {
+  const dataSourceId = await resolveDataSourceId(client, templatesDatabaseId)
+
+  const response = await withRetry(
+    () =>
+      client.pages.create({
+        parent: { data_source_id: dataSourceId },
+        properties: buildTemplateProperties(input),
+      }),
+    'pages.create(template)'
+  )
+
+  return mapPageToTemplate(response)
+}
+
+/** 템플릿 수정 (부분 업데이트) */
+export async function updateTemplatePage(
+  client: Client,
+  templateId: string,
+  input: UpdateTemplateInput
+): Promise<Template> {
+  const response = await withRetry(
+    () =>
+      client.pages.update({
+        page_id: templateId,
+        properties: buildTemplateProperties(input),
+      }),
+    'pages.update(template)'
+  )
+
+  return mapPageToTemplate(response)
+}
+
+/** 템플릿 삭제 (보관 처리) */
+export async function archiveTemplatePage(
+  client: Client,
+  templateId: string
+): Promise<void> {
+  await withRetry(
+    () => client.pages.update({ page_id: templateId, archived: true }),
+    'pages.archive(template)'
+  )
 }

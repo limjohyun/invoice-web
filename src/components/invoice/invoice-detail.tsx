@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Pencil } from 'lucide-react'
+import { Download, Pencil } from 'lucide-react'
 
 import type { InvoiceWithItems } from '@/lib/notion/types'
 import { Button } from '@/components/ui/button'
@@ -39,6 +39,12 @@ export function InvoiceDetail({ invoice }: { invoice: InvoiceWithItems }) {
           <InvoiceStatusBadge status={invoice.status} />
         </div>
         <div className="flex gap-2">
+          <a href={`/api/invoice/${invoice.id}/pdf`} download>
+            <Button variant="outline" className="gap-2">
+              <Download className="size-4" aria-hidden="true" />
+              PDF 다운로드
+            </Button>
+          </a>
           <Link href={`/invoice/${invoice.id}/edit`}>
             <Button variant="outline" className="gap-2">
               <Pencil className="size-4" aria-hidden="true" />

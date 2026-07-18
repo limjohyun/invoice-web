@@ -44,7 +44,7 @@ type ConnectionStatus = 'idle' | 'success' | 'error'
  *
  * 간단한 2단계 폼이라 React Hook Form/Zod 대신 useState로 상태를 직접 관리합니다.
  * 1) Integration Token 입력 → "연동 테스트" → 접근 가능한 데이터베이스 목록 조회
- * 2) 견적서(Invoices)/품목(Items) 데이터베이스 선택 → "저장" → 성공 시 대시보드로 이동
+ * 2) 견적서(Invoices)/품목(Items)/거래처(Clients)/템플릿(Templates) 데이터베이스 선택 → "저장" → 성공 시 대시보드로 이동
  */
 export function SettingsForm() {
   const router = useRouter()
@@ -56,6 +56,8 @@ export function SettingsForm() {
   const [databaseList, setDatabaseList] = useState<NotionDatabaseOption[]>([])
   const [selectedInvoicesDb, setSelectedInvoicesDb] = useState('')
   const [selectedItemsDb, setSelectedItemsDb] = useState('')
+  const [selectedClientsDb, setSelectedClientsDb] = useState('')
+  const [selectedTemplatesDb, setSelectedTemplatesDb] = useState('')
 
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('idle')
@@ -69,6 +71,8 @@ export function SettingsForm() {
     setDatabaseList([])
     setSelectedInvoicesDb('')
     setSelectedItemsDb('')
+    setSelectedClientsDb('')
+    setSelectedTemplatesDb('')
     setConnectionStatus('idle')
     setStatusMessage('')
   }
@@ -127,9 +131,11 @@ export function SettingsForm() {
       setDatabaseList(databasesResult.data)
       setSelectedInvoicesDb('')
       setSelectedItemsDb('')
+      setSelectedClientsDb('')
+      setSelectedTemplatesDb('')
       setConnectionStatus('success')
       setStatusMessage(
-        'Notion 워크스페이스와 정상적으로 연결되었습니다. 견적서/품목 데이터베이스를 선택해 주세요.'
+        'Notion 워크스페이스와 정상적으로 연결되었습니다. 견적서/품목/거래처/템플릿 데이터베이스를 선택해 주세요.'
       )
     } catch (error) {
       console.error('Notion 연동 테스트 에러:', error)
@@ -152,26 +158,34 @@ export function SettingsForm() {
       setStatusMessage('Integration Token을 입력해 주세요.')
       return
     }
-    if (!selectedInvoicesDb || !selectedItemsDb) {
-      setConnectionStatus('error')
-      setStatusMessage('견적서와 품목 데이터베이스를 모두 선택해 주세요.')
-      return
+    const selectedDbs = {
+      invoices: selectedInvoicesDb,
+      items: selectedItemsDb,
+      clients: selectedClientsDb,
+      templates: selectedTemplatesDb,
     }
-    if (selectedInvoicesDb === selectedItemsDb) {
+    if (Object.values(selectedDbs).some(dbId => !dbId)) {
       setConnectionStatus('error')
       setStatusMessage(
-        '견적서와 품목 데이터베이스는 서로 다르게 선택해 주세요.'
+        '견적서/품목/거래처/템플릿 데이터베이스를 모두 선택해 주세요.'
       )
+      return
+    }
+    if (new Set(Object.values(selectedDbs)).size !== 4) {
+      setConnectionStatus('error')
+      setStatusMessage('4개 데이터베이스는 서로 다르게 선택해 주세요.')
       return
     }
 
     setIsSaving(true)
     try {
-      const result = await saveNotionToken(
-        trimmedToken,
-        selectedInvoicesDb,
-        selectedItemsDb
-      )
+      const result = await saveNotionToken({
+        token: trimmedToken,
+        invoicesDbId: selectedInvoicesDb,
+        itemsDbId: selectedItemsDb,
+        clientsDbId: selectedClientsDb,
+        templatesDbId: selectedTemplatesDb,
+      })
 
       if (!result.success) {
         setConnectionStatus('error')
@@ -310,6 +324,56 @@ export function SettingsForm() {
               </Select>
             )}
           </div>
+
+          {/* Clients DB 선택 */}
+          <div className="space-y-2">
+            <Label htmlFor="clients-db">Clients DB</Label>
+            {isTesting ? (
+              <Skeleton className="h-9 w-full rounded-md" />
+            ) : (
+              <Select
+                value={selectedClientsDb}
+                onValueChange={setSelectedClientsDb}
+                disabled={isBusy || databaseList.length === 0}
+              >
+                <SelectTrigger id="clients-db">
+                  <SelectValue placeholder="연동 테스트 후 선택할 수 있습니다" />
+                </SelectTrigger>
+                <SelectContent>
+                  {databaseList.map(database => (
+                    <SelectItem key={database.id} value={database.id}>
+                      {database.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Templates DB 선택 */}
+          <div className="space-y-2">
+            <Label htmlFor="templates-db">Templates DB</Label>
+            {isTesting ? (
+              <Skeleton className="h-9 w-full rounded-md" />
+            ) : (
+              <Select
+                value={selectedTemplatesDb}
+                onValueChange={setSelectedTemplatesDb}
+                disabled={isBusy || databaseList.length === 0}
+              >
+                <SelectTrigger id="templates-db">
+                  <SelectValue placeholder="연동 테스트 후 선택할 수 있습니다" />
+                </SelectTrigger>
+                <SelectContent>
+                  {databaseList.map(database => (
+                    <SelectItem key={database.id} value={database.id}>
+                      {database.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -331,7 +395,13 @@ export function SettingsForm() {
         <Button
           type="button"
           onClick={handleSave}
-          disabled={isBusy || !selectedInvoicesDb || !selectedItemsDb}
+          disabled={
+            isBusy ||
+            !selectedInvoicesDb ||
+            !selectedItemsDb ||
+            !selectedClientsDb ||
+            !selectedTemplatesDb
+          }
         >
           {isSaving ? '저장 중...' : '저장'}
         </Button>
