@@ -33,7 +33,7 @@ export function DeleteInvoiceButton({ invoiceId }: { invoiceId: string }) {
         return
       }
       toast.success('견적서를 삭제했습니다.')
-      router.push('/dashboard')
+      router.push('/invoice')
       router.refresh()
     } catch (error) {
       console.error('견적서 삭제 에러:', error)

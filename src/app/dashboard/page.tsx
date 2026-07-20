@@ -1,74 +1,79 @@
 import { Metadata } from 'next'
-import Link from 'next/link'
-import { FilePlus2, FileText } from 'lucide-react'
 
-import { getInvoices } from '@/lib/actions/notion'
-import { Button } from '@/components/ui/button'
+import { getInvoices, getClients } from '@/lib/actions/notion'
 import { Card, CardContent } from '@/components/ui/card'
-import { InvoiceList } from '@/components/invoice/invoice-list'
+import { OverviewCards } from '@/components/dashboard/overview-cards'
+import { RecentActivity } from '@/components/dashboard/recent-activity'
 
 export const metadata: Metadata = {
   title: '대시보드',
-  description: '작성 중인 견적서 현황을 확인하세요',
+  description: '견적서 관리 현황을 한눈에 확인하세요',
 }
 
 /** 매 요청마다 최신 Notion 데이터를 반영 (mutation 후 revalidatePath만으로는 캐시 신선도를 보장하기 애매함) */
 export const dynamic = 'force-dynamic'
 
-export default async function DashboardPage() {
-  const result = await getInvoices()
-  const invoices = result.success ? (result.data ?? []) : []
+/** 최근 활동 목록에 보여줄 최대 건수 */
+const RECENT_ACTIVITY_LIMIT = 5
 
-  return (
-    <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between gap-4">
+export default async function DashboardPage() {
+  const [invoicesResult, clientsResult] = await Promise.all([
+    getInvoices(),
+    getClients(),
+  ])
+
+  if (!invoicesResult.success || !clientsResult.success) {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">대시보드</h1>
           <p className="text-muted-foreground text-sm">
-            작성 중인 견적서 현황을 한눈에 확인하세요
+            견적서 관리 현황을 한눈에 확인하세요
           </p>
         </div>
-        <Link href="/invoice/create">
-          <Button className="gap-2">
-            <FilePlus2 className="size-4" aria-hidden="true" />새 견적서 작성
-          </Button>
-        </Link>
-      </div>
-
-      {!result.success && (
         <Card>
           <CardContent className="text-destructive py-10 text-center text-sm">
-            {result.error?.message ?? '견적서 목록을 불러오지 못했습니다.'}
+            {invoicesResult.error?.message ??
+              clientsResult.error?.message ??
+              '대시보드 데이터를 불러오지 못했습니다.'}
           </CardContent>
         </Card>
-      )}
+      </div>
+    )
+  }
 
-      {result.success && invoices.length === 0 && (
-        <Card>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-              <div className="bg-muted flex size-16 items-center justify-center rounded-full">
-                <FileText
-                  className="text-muted-foreground size-8"
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="space-y-1">
-                <p className="text-base font-medium">
-                  현재 작성 중인 견적서 없음
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  새 견적서를 작성하면 이곳에 목록이 표시됩니다
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+  const invoices = invoicesResult.data ?? []
+  const clients = clientsResult.data ?? []
 
-      {result.success && invoices.length > 0 && (
-        <InvoiceList invoices={invoices} />
-      )}
+  const recentActivity = [...invoices]
+    .sort(
+      (a, b) =>
+        new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
+    )
+    .slice(0, RECENT_ACTIVITY_LIMIT)
+    .map(invoice => ({
+      id: invoice.id,
+      title: invoice.title,
+      clientName: invoice.clientName,
+      status: invoice.status,
+      modifiedAt: invoice.modifiedAt,
+    }))
+
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">대시보드</h1>
+        <p className="text-muted-foreground text-sm">
+          견적서 관리 현황을 한눈에 확인하세요
+        </p>
+      </div>
+
+      <OverviewCards
+        invoiceCount={invoices.length}
+        clientCount={clients.length}
+      />
+
+      <RecentActivity items={recentActivity} />
     </div>
   )
 }

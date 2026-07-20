@@ -369,6 +369,7 @@ export async function saveNotionToken(
 
     revalidatePath('/settings')
     revalidatePath('/dashboard')
+    revalidatePath('/invoice')
     return { success: true }
   } catch (error) {
     notionLogger.error('Notion 연동 정보 저장 에러', { error })
@@ -445,6 +446,7 @@ export async function createInvoice(
       input
     )
     revalidatePath('/dashboard')
+    revalidatePath('/invoice')
     return { success: true, data: invoice }
   } catch (error) {
     return { success: false, error: toActionError('견적서 생성 실패', error) }
@@ -463,6 +465,7 @@ export async function updateInvoice(
     const client = createNotionClient(context.context.accessToken)
     const invoice = await updateInvoicePage(client, invoiceId, input)
     revalidatePath('/dashboard')
+    revalidatePath('/invoice')
     revalidatePath(`/invoice/${invoiceId}`)
     return { success: true, data: invoice }
   } catch (error) {
@@ -479,6 +482,7 @@ export async function deleteInvoice(invoiceId: string): Promise<NotionResult> {
     const client = createNotionClient(context.context.accessToken)
     await archiveInvoicePage(client, invoiceId)
     revalidatePath('/dashboard')
+    revalidatePath('/invoice')
     return { success: true }
   } catch (error) {
     return { success: false, error: toActionError('견적서 삭제 실패', error) }
@@ -795,6 +799,7 @@ export async function createInvoiceWithItems(
     }
 
     revalidatePath('/dashboard')
+    revalidatePath('/invoice')
     return { success: true, data: { ...invoice, items: createdItems } }
   } catch (error) {
     // 보상 처리: 이미 생성된 품목/견적서를 archive해 부분 생성 상태로 남지 않게 한다.
@@ -874,6 +879,7 @@ export async function updateInvoiceWithItems(
     }
 
     revalidatePath('/dashboard')
+    revalidatePath('/invoice')
     revalidatePath(`/invoice/${invoiceId}`)
 
     const [invoice, finalItems] = await Promise.all([
