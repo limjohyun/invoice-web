@@ -31,6 +31,7 @@
 import { revalidatePath } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { deactivateShareLinksForInvoice } from '@/lib/actions/share'
 import { createNotionClient } from '@/lib/notion/client'
 import { normalizeNotionError, withRetry } from '@/lib/notion/errors'
 import { notionLogger } from '@/lib/notion/logger'
@@ -481,6 +482,9 @@ export async function deleteInvoice(invoiceId: string): Promise<NotionResult> {
   try {
     const client = createNotionClient(context.context.accessToken)
     await archiveInvoicePage(client, invoiceId)
+    // 삭제된 견적서의 공유 링크가 계속 살아있지 않도록 함께 정리한다 (Phase 6, F015 위험 요소).
+    // 실패해도 견적서 삭제 자체는 이미 성공했으므로 별도 처리하지 않는다.
+    await deactivateShareLinksForInvoice(invoiceId, context.context.userId)
     revalidatePath('/dashboard')
     revalidatePath('/invoice')
     return { success: true }

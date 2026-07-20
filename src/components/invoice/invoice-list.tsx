@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { InvoiceStatusBadge } from '@/components/invoice/invoice-status-badge'
+import { ShareLinkActions } from '@/components/invoice/share-link-actions'
 
 function formatAmount(amount: number, currency: string): string {
   return `${new Intl.NumberFormat('ko-KR').format(amount)} ${currency}`
@@ -36,6 +37,9 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
               <TableHead>상태</TableHead>
               <TableHead className="text-right">합계</TableHead>
               <TableHead>마지막 동기화</TableHead>
+              <TableHead className="w-px">
+                <span className="sr-only">작업</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -58,6 +62,9 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                 </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   {formatDateTime(invoice.modifiedAt)}
+                </TableCell>
+                <TableCell>
+                  <ShareLinkActions invoiceId={invoice.id} />
                 </TableCell>
               </TableRow>
             ))}
