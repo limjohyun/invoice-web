@@ -1,1 +1,2 @@
 - [프로젝트 성격 전환: 스타터 → Notion Invoice Web 실제 제품](project_starter_scope_phasing.md) — PRD가 바뀌었으니 로드맵 갱신 전 항상 PRD 재확인, F-ID 기반 MUST/SHOULD 매핑 적용
+- [Phase 6 관리자 기능/공유 링크 설계 결정](phase6_admin_sharelink_design.md) — role 미도입(싱글 테넌트 유지), 토큰 기반 공유 링크 채택. 재검토 전 이 결정부터 확인
