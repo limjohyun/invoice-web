@@ -233,13 +233,12 @@ export async function getInvoiceByShareToken(
 
     return { success: true, data: { ...invoice, items } }
   } catch (error) {
-    const normalized = normalizeNotionError(error)
-    notionLogger.error('공유 링크로 견적서 조회 실패', { error: normalized })
-    return normalized.code === 'not_found'
-      ? invalidLinkError
-      : {
-          success: false,
-          error: { code: normalized.code, message: normalized.message },
-        }
+    // Notion 쪽 실패 원인(권한 만료, 잘못된 페이지 ID, 일시적 오류 등)을 공개 라우트의
+    // 익명 방문자에게 그대로 노출하지 않는다 — 항상 "유효하지 않은 링크"로만 보여주고
+    // 실제 원인은 서버 로그로만 남긴다.
+    notionLogger.error('공유 링크로 견적서 조회 실패', {
+      error: normalizeNotionError(error),
+    })
+    return invalidLinkError
   }
 }
