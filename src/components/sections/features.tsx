@@ -7,71 +7,51 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Zap,
-  Shield,
-  Palette,
-  Code,
-  Smartphone,
-  Globe,
-  Settings,
-  Users,
-  Database,
+  LayoutDashboard,
+  FileText,
+  Download,
+  Building2,
+  LayoutTemplate,
+  RefreshCw,
 } from 'lucide-react'
 
+// 실제 제품 기능 카드 6개 (제네릭 개발자 도구 자랑 대신 서비스 핵심 기능 소개)
 const features = [
   {
-    icon: Zap,
-    title: '빠른 성능',
+    icon: LayoutDashboard,
+    title: '대시보드',
     description:
-      'Next.js 15의 최적화된 빌드로 빠른 로딩 속도와 뛰어난 사용자 경험을 제공합니다.',
+      '작성 중인 견적서 현황과 최근 활동을 한눈에 확인할 수 있습니다.',
   },
   {
-    icon: Shield,
-    title: '타입 안정성',
+    icon: FileText,
+    title: '견적서 작성',
     description:
-      'TypeScript로 런타임 에러를 방지하고 개발 생산성을 크게 향상시킵니다.',
+      '품목을 추가하면 수량과 단가에 따라 합계 금액이 자동으로 계산됩니다.',
   },
   {
-    icon: Palette,
-    title: '아름다운 디자인',
+    icon: Download,
+    title: 'PDF 다운로드',
     description:
-      'ShadcnUI와 TailwindCSS로 구성된 모던하고 일관된 디자인 시스템을 제공합니다.',
+      '한글 폰트를 완벽히 지원하는 PDF로 견적서를 바로 내려받을 수 있습니다.',
   },
   {
-    icon: Code,
-    title: '개발자 경험',
+    icon: Building2,
+    title: '거래처 관리',
     description:
-      '최고의 DX를 위한 ESLint, Prettier, Husky 등 개발 도구가 미리 설정되어 있습니다.',
+      '자주 거래하는 업체 정보를 등록해두고 견적서 작성 시 바로 불러옵니다.',
   },
   {
-    icon: Smartphone,
-    title: '반응형 디자인',
+    icon: LayoutTemplate,
+    title: '템플릿 관리',
     description:
-      'usehooks-ts를 활용한 완벽한 반응형 디자인으로 모든 디바이스에서 최적화됩니다.',
+      '자주 쓰는 품목 구성을 템플릿으로 저장해 반복 작업을 줄여줍니다.',
   },
   {
-    icon: Globe,
-    title: 'SEO 최적화',
+    icon: RefreshCw,
+    title: 'Notion 완전 동기화',
     description:
-      '검색 엔진 최적화와 메타데이터 관리가 기본으로 설정되어 있습니다.',
-  },
-  {
-    icon: Settings,
-    title: '확장 가능',
-    description:
-      '모듈화된 구조로 새로운 기능을 쉽게 추가하고 커스터마이징할 수 있습니다.',
-  },
-  {
-    icon: Users,
-    title: '프로덕션 준비',
-    description:
-      '실제 서비스 운영에 필요한 모든 설정과 보안 기능이 포함되어 있습니다.',
-  },
-  {
-    icon: Database,
-    title: '상태 관리',
-    description:
-      '검증된 라이브러리들을 활용한 효율적인 상태 관리 솔루션을 제공합니다.',
+      '작성한 모든 견적서 데이터는 연결된 Notion 데이터베이스에 실시간으로 반영됩니다.',
   },
 ]
 
@@ -82,8 +62,8 @@ export function FeaturesSection() {
         <div className="mb-16 text-center">
           <h2 className="mb-4 text-3xl font-bold">주요 기능</h2>
           <p className="text-muted-foreground mx-auto max-w-2xl">
-            프로덕션 준비가 완료된 강력한 기능들로 빠르고 안정적인 웹
-            애플리케이션을 구축하세요.
+            견적서 작성부터 거래처·템플릿 관리까지, 필요한 기능을 모두
+            제공합니다.
           </p>
         </div>
 
