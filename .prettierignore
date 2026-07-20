@@ -39,3 +39,9 @@ Thumbs.db
 
 # Generated files
 next-env.d.ts
+
+# 벤더 MCP 도구 (별도 package.json/lint 설정을 가진 독립 프로젝트)
+mcp-shrimp-task-manager/
+
+# Claude Code 자체 설정/메모리 (앱 소스 아님)
+.claude/

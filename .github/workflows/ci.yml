@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # 빌드 시점에 src/lib/env.ts의 zod 스키마 검증만 통과하면 되는 더미 값이다.
+    # 실제 Supabase/Notion API를 호출하지 않으므로 진짜 시크릿이 필요하지 않다.
+    env:
+      SUPABASE_URL: https://ci-placeholder.supabase.co
+      SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      NOTION_API_KEY: ntn_ci_placeholder_token
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run build
+      - run: npm run test
+
+      # Playwright e2e(tests/e2e/login-flow.spec.ts)는 실제 Supabase service-role 키가
+      # 있어야 테스트 계정을 생성/초기화할 수 있어 이 워크플로우에는 포함하지 않았다.
+      # 필요 시 GitHub repo Settings > Secrets에 실제 값을 등록하고
+      # `npx playwright install --with-deps && npm run test:e2e` 스텝을 별도 잡으로 추가한다.
