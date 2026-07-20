@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { InvoiceStatusBadge } from '@/components/invoice/invoice-status-badge'
+import { InvoiceStatusSelect } from '@/components/invoice/invoice-status-select'
 import { DeleteInvoiceButton } from '@/components/invoice/delete-invoice-button'
 
 function formatAmount(amount: number, currency: string): string {
@@ -36,7 +36,7 @@ export function InvoiceDetail({ invoice }: { invoice: InvoiceWithItems }) {
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">{invoice.title}</h1>
-          <InvoiceStatusBadge status={invoice.status} />
+          <InvoiceStatusSelect invoiceId={invoice.id} status={invoice.status} />
         </div>
         <div className="flex gap-2">
           <a href={`/api/invoice/${invoice.id}/pdf`} download>
